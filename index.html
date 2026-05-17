@@ -484,11 +484,30 @@ function resetPanel(side) {
 }
 
 // ── Voice state machine ─────────────────────────────────────────
-// idle → charged (dopo "fire/fuoco") → burning (mano aperta) → idle (mano chiusa)
-const voiceState = { Left: 'idle', Right: 'idle' };
-const FIRE_WORDS = ['fire', 'fuoco', 'feu', 'feuer', 'fuego'];
+// idle → charged (dopo keyword) → burning (mano aperta) → idle (mano chiusa)
+const voiceState   = { Left: 'idle', Right: 'idle' };
+const currentSpell = { Left: 'fire', Right: 'fire' };
 
-function isFire(t) { return FIRE_WORDS.some(w => t.toLowerCase().includes(w)); }
+const SPELL_KEYWORDS = {
+  fire:    ['fire', 'fuoco', 'feu', 'feuer', 'fuego'],
+  light:   ['light', 'luce'],
+  dark:    ['dark', 'ombra'],
+  magic:   ['magic', 'magia'],
+  death:   ['death', 'morte'],
+  green:   ['green', 'natura'],
+  thunder: ['thunder', 'fulmine'],
+  earth:   ['earth', 'terra'],
+  air:     ['air', 'aria'],
+  water:   ['water', 'acqua'],
+};
+
+function detectSpell(t) {
+  const lower = t.toLowerCase();
+  for (const [spell, words] of Object.entries(SPELL_KEYWORDS)) {
+    if (words.some(w => lower.includes(w))) return spell;
+  }
+  return null;
+}
 
 function showVoiceFeedback(word) {
   const el = document.getElementById('voiceFeedback');
@@ -564,20 +583,23 @@ function initVoice() {
       const trimmed = transcript.trim();
       if (trimmed) setMicStatus(true, '"' + trimmed + '"');
 
-      if (!isFire(transcript)) return;
+      const spell = detectSpell(transcript);
+      if (!spell) return;
       const now = Date.now();
       if (now - lastFireTime < 1500) return;
       lastFireTime = now;
 
+      const cfg = SPELL_CONFIGS[spell];
       let charged = false;
       ['Left', 'Right'].forEach(side => {
         if (voiceState[side] === 'idle') {
-          voiceState[side] = 'charged';
+          voiceState[side]   = 'charged';
+          currentSpell[side] = spell;
           charged = true;
         }
       });
       if (charged) {
-        addLog('🔥 "' + trimmed + '" — pronto!', 'Left');
+        addLog(`${cfg.emoji} "${trimmed}" — pronto!`, 'Left');
         showVoiceFeedback(trimmed);
       }
     };
@@ -616,68 +638,299 @@ function initVoice() {
   startRec();
 }
 
-// ── Fireball particle system ────────────────────────────────────
-const fireballs = {};
+// ── Spell visual configs ────────────────────────────────────────
+const SPELL_CONFIGS = {
+  fire: {
+    emoji: '🔥', label: 'Fuoco', count: 7,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random() * 2.0 + 0.5, r = Math.random() * 20 + 6;
+      return { x: cx + Math.cos(angle)*r*0.25, y: cy + Math.sin(angle)*r*0.25,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed - 1.4,
+        life: 1.0, decay: Math.random()*0.028+0.022, size: Math.random()*14+6, hue: Math.random()*45 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy-=0.045; p.vx*=0.97; p.life-=p.decay; p.size*=0.97; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `hsla(${60+p.hue},100%,98%,${a})`);
+      g.addColorStop(0.3, `hsla(${40+p.hue},100%,70%,${a*0.9})`);
+      g.addColorStop(0.7, `hsla(${10+p.hue},90%,50%,${a*0.6})`);
+      g.addColorStop(1,   `hsla(${p.hue},80%,30%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
 
-class FireballSystem {
-  constructor() { this.particles = []; this.active = false; }
+  light: {
+    emoji: '✨', label: 'Luce', count: 9,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*2.5+0.5, r = Math.random()*15+4;
+      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.5,
+        life: 1.0, decay: Math.random()*0.02+0.012, size: Math.random()*13+5 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vx*=0.99; p.vy*=0.99; p.life-=p.decay; p.size*=0.98; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `rgba(255,255,255,${a})`);
+      g.addColorStop(0.3, `rgba(255,255,200,${a*0.9})`);
+      g.addColorStop(0.7, `rgba(255,230,80,${a*0.5})`);
+      g.addColorStop(1,   `rgba(255,200,0,0)`);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+
+  dark: {
+    emoji: '🌑', label: 'Oscurità', count: 6,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*1.5+0.3, r = Math.random()*18+5;
+      return { x: cx+Math.cos(angle)*r*0.3, y: cy+Math.sin(angle)*r*0.3,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed+0.3,
+        life: 1.0, decay: Math.random()*0.02+0.014, size: Math.random()*17+9,
+        hue: Math.random()*60+260 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.025; p.vx*=0.98; p.life-=p.decay; p.size*=0.975; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `hsla(${p.hue},60%,8%,${a})`);
+      g.addColorStop(0.4, `hsla(${p.hue},85%,20%,${a*0.85})`);
+      g.addColorStop(0.75,`hsla(${p.hue},100%,35%,${a*0.5})`);
+      g.addColorStop(1,   `hsla(${p.hue},100%,20%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='source-over';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+      ctx.globalCompositeOperation='lighter';
+      const rg = ctx.createRadialGradient(p.x,p.y,p.size*0.5,p.x,p.y,p.size*1.6);
+      rg.addColorStop(0,`hsla(${p.hue},100%,40%,0)`);
+      rg.addColorStop(0.5,`hsla(${p.hue},100%,40%,${a*0.12})`);
+      rg.addColorStop(1,`hsla(${p.hue},100%,40%,0)`);
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size*1.6,0,Math.PI*2); ctx.fillStyle=rg; ctx.fill();
+      ctx.restore();
+    },
+  },
+
+  magic: {
+    emoji: '🌈', label: 'Magia', count: 10,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*2.2+0.5, r = Math.random()*16+5;
+      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.8,
+        life: 1.0, decay: Math.random()*0.025+0.016, size: Math.random()*14+6,
+        hue: Math.random()*360, shift: Math.random()*4+2 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy-=0.02; p.vx*=0.98; p.life-=p.decay; p.size*=0.975; p.hue=(p.hue+p.shift)%360; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `rgba(255,255,255,${a})`);
+      g.addColorStop(0.2, `hsla(${p.hue},100%,90%,${a*0.9})`);
+      g.addColorStop(0.6, `hsla(${(p.hue+80)%360},100%,60%,${a*0.6})`);
+      g.addColorStop(1,   `hsla(${(p.hue+160)%360},100%,50%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+
+  death: {
+    emoji: '💀', label: 'Morte', count: 7,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*1.8+0.4, r = Math.random()*18+6;
+      return { x: cx+Math.cos(angle)*r*0.25, y: cy+Math.sin(angle)*r*0.25,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed+0.5,
+        life: 1.0, decay: Math.random()*0.022+0.015, size: Math.random()*16+8,
+        redness: Math.random() };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.vx*=0.975; p.life-=p.decay; p.size*=0.975; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,    `hsla(0,80%,4%,${a})`);
+      g.addColorStop(0.35, `hsla(0,90%,8%,${a*0.88})`);
+      g.addColorStop(0.7,  `hsla(${p.redness*15},100%,${12+p.redness*22}%,${a*0.65})`);
+      g.addColorStop(1,    `hsla(0,80%,18%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='source-over';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+      if (p.redness > 0.45) {
+        ctx.globalCompositeOperation='lighter';
+        const rg = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size*1.4);
+        rg.addColorStop(0,`rgba(0,0,0,0)`);
+        rg.addColorStop(0.7,`rgba(160,0,0,${a*0.09})`);
+        rg.addColorStop(1,`rgba(0,0,0,0)`);
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.size*1.4,0,Math.PI*2); ctx.fillStyle=rg; ctx.fill();
+      }
+      ctx.restore();
+    },
+  },
+
+  green: {
+    emoji: '🌿', label: 'Natura', count: 8,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*2.0+0.4, r = Math.random()*18+5;
+      return { x: cx+Math.cos(angle)*r*0.25, y: cy+Math.sin(angle)*r*0.25,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-1.0,
+        life: 1.0, decay: Math.random()*0.022+0.015, size: Math.random()*14+6,
+        hue: Math.random()*40+100, t: Math.random()*Math.PI*2 };
+    },
+    update: p => {
+      p.t += 0.08; p.vx += Math.sin(p.t)*0.025;
+      p.x+=p.vx; p.y+=p.vy; p.vy-=0.025; p.vx*=0.98; p.life-=p.decay; p.size*=0.975;
+    },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `hsla(${p.hue},80%,92%,${a})`);
+      g.addColorStop(0.3, `hsla(${p.hue},90%,60%,${a*0.9})`);
+      g.addColorStop(0.7, `hsla(${p.hue-10},80%,35%,${a*0.6})`);
+      g.addColorStop(1,   `hsla(${p.hue-20},70%,18%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+
+  thunder: {
+    emoji: '⚡', label: 'Fulmine', count: 11,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*3.5+1.0, r = Math.random()*12+3;
+      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.5,
+        life: 1.0, decay: Math.random()*0.07+0.04, size: Math.random()*10+4,
+        spark: Math.random()>0.5 };
+    },
+    update: p => {
+      p.vx+=(Math.random()-0.5)*1.0; p.vy+=(Math.random()-0.5)*1.0;
+      p.x+=p.vx; p.y+=p.vy; p.vx*=0.9; p.vy*=0.9; p.life-=p.decay; p.size*=0.92;
+    },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      if (p.spark) {
+        g.addColorStop(0,`rgba(255,255,255,${a})`);
+        g.addColorStop(0.4,`rgba(200,220,255,${a*0.9})`);
+        g.addColorStop(1,`rgba(100,160,255,0)`);
+      } else {
+        g.addColorStop(0,`rgba(255,255,180,${a})`);
+        g.addColorStop(0.4,`rgba(255,220,30,${a*0.9})`);
+        g.addColorStop(0.7,`rgba(200,140,0,${a*0.5})`);
+        g.addColorStop(1,`rgba(100,80,0,0)`);
+      }
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+
+  earth: {
+    emoji: '🪨', label: 'Terra', count: 6,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*1.4+0.3, r = Math.random()*20+8;
+      return { x: cx+Math.cos(angle)*r*0.3, y: cy+Math.sin(angle)*r*0.3,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+        life: 1.0, decay: Math.random()*0.016+0.01, size: Math.random()*20+11,
+        hue: Math.random()*30+18, sat: Math.random()*30+30 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.09; p.vx*=0.97; p.life-=p.decay; p.size*=0.98; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `hsla(${p.hue+10},${p.sat+20}%,68%,${a})`);
+      g.addColorStop(0.4, `hsla(${p.hue},${p.sat}%,42%,${a*0.9})`);
+      g.addColorStop(0.7, `hsla(${p.hue-8},${p.sat-10}%,22%,${a*0.7})`);
+      g.addColorStop(1,   `hsla(${p.hue},20%,10%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='source-over';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+
+  air: {
+    emoji: '💨', label: 'Aria', count: 10,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*3.2+1.0, r = Math.random()*14+4;
+      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-1.2,
+        life: 1.0, decay: Math.random()*0.03+0.018, size: Math.random()*17+6 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy-=0.065; p.vx*=0.97; p.vy*=0.97; p.life-=p.decay; p.size*=0.98; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life) * 0.65;
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `rgba(255,255,255,${a})`);
+      g.addColorStop(0.3, `rgba(210,235,255,${a*0.7})`);
+      g.addColorStop(0.7, `rgba(160,210,255,${a*0.35})`);
+      g.addColorStop(1,   `rgba(120,190,255,0)`);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+
+  water: {
+    emoji: '💧', label: 'Acqua', count: 8,
+    spawn: (cx, cy, angle) => {
+      const speed = Math.random()*2.0+0.5, r = Math.random()*16+5;
+      return { x: cx+Math.cos(angle)*r*0.25, y: cy+Math.sin(angle)*r*0.25,
+        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.3,
+        life: 1.0, decay: Math.random()*0.022+0.015, size: Math.random()*14+7,
+        hue: Math.random()*40+190 };
+    },
+    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.04; p.vx*=0.98; p.life-=p.decay; p.size*=0.975; },
+    draw: (ctx, p) => {
+      const a = Math.max(0, p.life);
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
+      g.addColorStop(0,   `hsla(${p.hue},70%,95%,${a})`);
+      g.addColorStop(0.3, `hsla(${p.hue},90%,68%,${a*0.9})`);
+      g.addColorStop(0.7, `hsla(${p.hue-10},80%,42%,${a*0.6})`);
+      g.addColorStop(1,   `hsla(${p.hue-20},70%,22%,0)`);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
+    },
+  },
+};
+
+// ── SpellSystem (replaces FireballSystem) ───────────────────────
+class SpellSystem {
+  constructor() { this.particles = []; this.active = false; this.type = 'fire'; }
+
+  setType(type) {
+    if (this.type !== type) { this.particles = []; }
+    this.type = type;
+  }
 
   spawn(cx, cy) {
     this.active = true;
-    for (let i = 0; i < 7; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 2.0 + 0.5;
-      const r     = Math.random() * 20 + 6;
-      this.particles.push({
-        x: cx + Math.cos(angle) * r * 0.25, y: cy + Math.sin(angle) * r * 0.25,
-        vx: Math.cos(angle) * speed,        vy: Math.sin(angle) * speed - 1.4,
-        life: 1.0, decay: Math.random() * 0.028 + 0.022,
-        size: Math.random() * 14 + 6,       hue: Math.random() * 45,
-      });
+    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
+    for (let i = 0; i < cfg.count; i++) {
+      this.particles.push(cfg.spawn(cx, cy, Math.random() * Math.PI * 2));
     }
   }
 
   update() {
     this.particles = this.particles.filter(p => p.life > 0);
-    this.particles.forEach(p => {
-      p.x += p.vx; p.y += p.vy;
-      p.vy -= 0.045; p.vx *= 0.97;
-      p.life -= p.decay; p.size *= 0.97;
-    });
+    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
+    this.particles.forEach(p => cfg.update(p));
   }
 
   draw(ctx) {
-    this.particles.forEach(p => {
-      const alpha = Math.max(0, p.life);
-      const grad  = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
-      grad.addColorStop(0,   `hsla(${60 + p.hue}, 100%, 98%, ${alpha})`);
-      grad.addColorStop(0.3, `hsla(${40 + p.hue}, 100%, 70%, ${alpha * 0.9})`);
-      grad.addColorStop(0.7, `hsla(${10 + p.hue},  90%, 50%, ${alpha * 0.6})`);
-      grad.addColorStop(1,   `hsla(${p.hue},       80%, 30%, 0)`);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = grad; ctx.fill();
-      ctx.restore();
-    });
+    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
+    this.particles.forEach(p => cfg.draw(ctx, p));
   }
 
   deactivate() { this.active = false; }
   kill()       { this.active = false; this.particles = []; }
 }
 
-fireballs.Left  = new FireballSystem();
-fireballs.Right = new FireballSystem();
+const spells = {
+  Left:  new SpellSystem(),
+  Right: new SpellSystem(),
+};
 
-// ── onResults ──────────────────────────────────────────────────
 function onResults(results) {
   canvas.width  = video.videoWidth  || 640;
   canvas.height = video.videoHeight || 480;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ['Left', 'Right'].forEach(side => {
-    fireballs[side].update();
-    fireballs[side].draw(ctx);
+    spells[side].update();
+    spells[side].draw(ctx);
   });
 
   const activeSides = new Set();
@@ -705,28 +958,29 @@ function onResults(results) {
       const vs        = voiceState[userSide];
 
       if (isOpen) {
-        if (vs === 'charged') voiceState[userSide] = 'burning';
-        if (voiceState[userSide] === 'burning') fireballs[userSide].spawn(palmCx, palmCy);
-      } else {
-        // mano chiusa
-        if (vs === 'burning') {
-          voiceState[userSide] = 'idle'; // deve ridire fire
-          fireballs[userSide].deactivate();
+        if (vs === 'charged') {
+          voiceState[userSide] = 'burning';
+          spells[userSide].setType(currentSpell[userSide]);
         }
-        // se era 'charged' lo manteniamo: non ha ancora aperto la mano
+        if (voiceState[userSide] === 'burning') spells[userSide].spawn(palmCx, palmCy);
+      } else {
+        if (vs === 'burning') {
+          voiceState[userSide] = 'idle';
+          spells[userSide].deactivate();
+        }
       }
     });
   } else {
     statusDot.classList.remove('active');
     statusText.textContent = 'Nessuna mano rilevata';
-    fireballs.Left.deactivate();
-    fireballs.Right.deactivate();
+    spells.Left.deactivate();
+    spells.Right.deactivate();
   }
 
   ['Left', 'Right'].forEach(side => {
     if (!activeSides.has(side)) {
       resetPanel(side);
-      fireballs[side].deactivate();
+      spells[side].deactivate();
       if (voiceState[side] === 'burning') voiceState[side] = 'idle';
     }
   });
