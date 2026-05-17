@@ -316,6 +316,10 @@
       <div class="status-bar">
         <div class="dot" id="statusDot"></div>
         <span id="statusText">In attesa...</span>
+        <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+          <div class="dot" id="micDot"></div>
+          <span id="micText" style="color:var(--muted); font-size:0.68rem;">Mic off</span>
+        </span>
       </div>
       <!-- voice feedback toast -->
       <div id="voiceFeedback" style="
@@ -503,46 +507,79 @@ function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { addLog('Speech API non supportata', 'Left'); return; }
 
-  const rec = new SR();
-  rec.lang = 'it-IT';
-  rec.continuous = true;
-  rec.interimResults = false;
-
+  let rec = null;
+  let stopped = false;
   let lastFireTime = 0;
-  let stopped = false;   // true solo se l'utente nega i permessi
 
-  rec.onresult = (e) => {
-    const transcript = e.results[e.results.length - 1][0].transcript;
-    if (!isFire(transcript)) return;
-    const now = Date.now();
-    if (now - lastFireTime < 1500) return;
-    lastFireTime = now;
-    let charged = false;
-    ['Left', 'Right'].forEach(side => {
-      if (voiceState[side] === 'idle') {
-        voiceState[side] = 'charged';
-        charged = true;
+  const micDot  = document.getElementById('micDot');
+  const micText = document.getElementById('micText');
+
+  function setMicStatus(active, label) {
+    if (micDot)  micDot.style.background  = active ? '#ff9f00' : 'var(--muted)';
+    if (micDot)  micDot.style.boxShadow   = active ? '0 0 8px #ff9f00' : 'none';
+    if (micText) micText.textContent = label;
+  }
+
+  function build() {
+    rec = new SR();
+    rec.lang = 'it-IT';
+    rec.continuous = true;
+    rec.interimResults = true;
+
+    rec.onstart = () => setMicStatus(true, 'In ascolto...');
+
+    rec.onresult = (e) => {
+      let transcript = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
       }
-    });
-    if (charged) {
-      addLog('🔥 "' + transcript.trim() + '" — pronto!', 'Left');
-      showVoiceFeedback(transcript.trim());
+      // Mostra sempre cosa sente
+      setMicStatus(true, '"' + transcript.trim() + '"');
+
+      if (!isFire(transcript)) return;
+      const now = Date.now();
+      if (now - lastFireTime < 1500) return;
+      lastFireTime = now;
+
+      let charged = false;
+      ['Left', 'Right'].forEach(side => {
+        if (voiceState[side] === 'idle') {
+          voiceState[side] = 'charged';
+          charged = true;
+        }
+      });
+      if (charged) {
+        addLog('🔥 "' + transcript.trim() + '" — pronto!', 'Left');
+        showVoiceFeedback(transcript.trim());
+      }
+    };
+
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed') {
+        stopped = true;
+        setMicStatus(false, 'Permesso negato');
+        return;
+      }
+      if (e.error === 'no-speech') {
+        setMicStatus(false, 'Nessun suono...');
+        return;
+      }
+      setMicStatus(false, 'Errore: ' + e.error);
+    };
+
+    rec.onend = () => {
+      setMicStatus(false, 'Riavvio...');
+      if (!stopped) setTimeout(() => { build(); }, 200);
+    };
+
+    try {
+      rec.start();
+    } catch(e) {
+      setMicStatus(false, 'Errore avvio');
     }
-  };
+  }
 
-  rec.onerror = (e) => {
-    if (e.error === 'not-allowed') {
-      stopped = true;
-      addLog('Microfono negato — controlla i permessi', 'Left');
-    }
-    // no-speech è normale, ignoriamo
-  };
-
-  rec.onend = () => {
-    if (!stopped) rec.start(); // riavvio immediato, stessa sessione
-  };
-
-  rec.start();
+  build();
 }
 
 // ── Fireball particle system ────────────────────────────────────
@@ -681,15 +718,8 @@ startBtn.addEventListener('click', async () => {
   hands.onResults(onResults);
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user' },
-      audio: true   // chiedi mic e cam insieme, una sola volta
-    });
-    video.srcObject = new MediaStream(stream.getVideoTracks());
-    // Tieni vivo lo stream audio senza riprodurlo (evita l'eco)
-    const audioCtx = new AudioContext();
-    const src = audioCtx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
-    src.connect(audioCtx.createGain()); // gain disconnesso: silenzio ma stream attivo
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    video.srcObject = stream;
     await video.play();
     loadingOverlay.style.display = 'none';
     statusText.textContent = 'Modello in caricamento...';
