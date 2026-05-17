@@ -702,6 +702,40 @@ const voiceState   = { Left: 'idle', Right: 'idle' };
 const palmPos = { Left: { x: 0, y: 0 }, Right: { x: 0, y: 0 } };
 // Index fingertip positions for shoot direction
 const indexPos = { Left: { x: 0, y: 0 }, Right: { x: 0, y: 0 } };
+
+// ── Magic Pen trail system ──────────────────────────────────────
+// Live particles emitted from the fingertip, age and fade over ~2s
+const penParticles = { Left: [], Right: [] };
+
+function emitPenParticles(side, x, y, spellType) {
+  const cfg = SPELL_CONFIGS[spellType] || SPELL_CONFIGS.fire;
+  // Emit 4 particles per frame at the fingertip
+  for (let i = 0; i < 4; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const p = cfg.spawn(x, y, angle);
+    p.vx *= 0.12;  // almost stationary — stick to the path
+    p.vy *= 0.12;
+    p.size *= 0.85;
+    p.decay *= 0.28; // live ~2s (decay slowed way down)
+    penParticles[side].push(p);
+  }
+}
+
+function updatePenParticles(ctx) {
+  ['Left', 'Right'].forEach(side => {
+    const cfg_cache = {};
+    penParticles[side] = penParticles[side].filter(p => p.life > 0);
+    penParticles[side].forEach(p => {
+      const cfg = cfg_cache[p._type] || (cfg_cache[p._type] = SPELL_CONFIGS[p._type] || SPELL_CONFIGS.fire);
+      cfg.update(p);
+      cfg.draw(ctx, p);
+    });
+  });
+}
+
+function clearPenTrail(side) {
+  penParticles[side] = [];
+}
 const currentSpell = { Left: 'fire', Right: 'fire' };
 
 // Keyword espanse con varianti fonetiche che Chrome IT trascrive male
@@ -1401,6 +1435,9 @@ function onResults(results) {
     spells[side].draw(ctx);
   });
 
+  // Update & draw magic pen trail particles
+  updatePenParticles(ctx);
+
   // Snap growing orbs to the hand
   updateProjectileOrigins();
   // Update & draw projectiles
@@ -1438,16 +1475,44 @@ function onResults(results) {
       palmPos[userSide]  = { x: palmCx, y: palmCy };
       indexPos[userSide] = { x: lm[8].x * canvas.width, y: lm[8].y * canvas.height };
 
-      if (isOpen) {
-        if (vs === 'charged') {
-          voiceState[userSide] = 'burning';
-          spells[userSide].setType(currentSpell[userSide]);
+      // Only index finger up = magic pen mode
+      const onlyIndex = !fingersUp[0] && fingersUp[1] && !fingersUp[2] && !fingersUp[3] && !fingersUp[4];
+      const fingertipX = lm[8].x * canvas.width;
+      const fingertipY = lm[8].y * canvas.height;
+
+      if (onlyIndex && voiceState[userSide] === 'burning') {
+        // Magic pen: emit trail particles at fingertip
+        const spellType = currentSpell[userSide];
+        const cfg = SPELL_CONFIGS[spellType] || SPELL_CONFIGS.fire;
+        for (let _i = 0; _i < 4; _i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const p = cfg.spawn(fingertipX, fingertipY, angle);
+          p.vx *= 0.12;
+          p.vy *= 0.12;
+          p.size *= 0.85;
+          p.decay *= 0.28; // ~2s lifetime
+          p._type = spellType;
+          penParticles[userSide].push(p);
         }
-        if (voiceState[userSide] === 'burning') spells[userSide].spawn(palmCx, palmCy);
+        // Tiny tip glow using spell particles (fast, vivid)
+        for (let _i = 0; _i < 2; _i++) {
+          const p = cfg.spawn(fingertipX, fingertipY, Math.random() * Math.PI * 2);
+          p.vx *= 0.5; p.vy *= 0.5; p.size *= 1.1;
+          spells[userSide].particles.push(p);
+        }
       } else {
-        if (vs === 'burning') {
-          voiceState[userSide] = 'idle';
-          spells[userSide].deactivate();
+        clearPenTrail(userSide);
+        if (isOpen) {
+          if (vs === 'charged') {
+            voiceState[userSide] = 'burning';
+            spells[userSide].setType(currentSpell[userSide]);
+          }
+          if (voiceState[userSide] === 'burning') spells[userSide].spawn(palmCx, palmCy);
+        } else {
+          if (vs === 'burning') {
+            voiceState[userSide] = 'idle';
+            spells[userSide].deactivate();
+          }
         }
       }
     });
@@ -1462,6 +1527,7 @@ function onResults(results) {
     if (!activeSides.has(side)) {
       resetPanel(side);
       spells[side].deactivate();
+      clearPenTrail(side);
       if (voiceState[side] === 'burning') voiceState[side] = 'idle';
     }
   });
