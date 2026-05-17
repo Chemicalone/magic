@@ -529,12 +529,8 @@ function initVoice() {
   const micDot  = document.getElementById('micDot');
   const micText = document.getElementById('micText');
 
-  let rec         = null;
-  let stopped     = false;      // true solo se permesso negato
-  let isRunning   = false;      // true quando rec è attivamente in ascolto
   let lastFireTime = 0;
-  let restartTimer = null;
-  let watchdog     = null;
+  let permissionDenied = false;
 
   function setMicStatus(active, label) {
     if (micDot)  micDot.style.background = active ? '#ff9f00' : 'var(--muted)';
@@ -542,100 +538,75 @@ function initVoice() {
     if (micText) micText.textContent = label;
   }
 
-  // Watchdog: se dopo 3s il mic risulta spento, forza riavvio
-  function resetWatchdog() {
-    clearTimeout(watchdog);
-    watchdog = setTimeout(() => {
-      if (!stopped && !isRunning) startRec();
-    }, 3000);
-  }
+  // Crea una sola istanza con continuous = true
+  const rec = new SR();
+  rec.lang           = 'it-IT';
+  rec.continuous     = true;
+  rec.interimResults = true;
 
-  function startRec() {
-    if (stopped) return;
-    clearTimeout(restartTimer);
+  rec.onstart = () => {
+    setMicStatus(true, 'In ascolto...');
+  };
 
-    // Ferma l'istanza precedente senza triggerare onend ricorsivo
-    if (rec) {
-      rec.onend  = null;
-      rec.onerror = null;
-      try { rec.abort(); } catch(_) {}
-      rec = null;
+  rec.onresult = (e) => {
+    let transcript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript;
     }
+    const trimmed = transcript.trim();
+    if (trimmed) setMicStatus(true, '"' + trimmed + '"');
 
-    isRunning = false;
-    rec = new SR();
-    rec.lang           = 'it-IT';
-    rec.continuous     = true;
-    rec.interimResults = true;
+    const spell = detectSpell(transcript);
+    if (!spell) return;
+    const now = Date.now();
+    if (now - lastFireTime < 1500) return;
+    lastFireTime = now;
 
-    rec.onstart = () => {
-      isRunning = true;
+    const cfg = SPELL_CONFIGS[spell];
+    let charged = false;
+    ['Left', 'Right'].forEach(side => {
+      if (voiceState[side] === 'idle') {
+        voiceState[side]   = 'charged';
+        currentSpell[side] = spell;
+        charged = true;
+      }
+    });
+    if (charged) {
+      addLog(`${cfg.emoji} "${trimmed}" — pronto!`, 'Left');
+      showVoiceFeedback(trimmed);
+    }
+  };
+
+  rec.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      permissionDenied = true;
+      setMicStatus(false, 'Permesso negato');
+      return;
+    }
+    // no-speech è normale: il browser non ha sentito nulla, si continua
+    if (e.error === 'no-speech') {
       setMicStatus(true, 'In ascolto...');
-      resetWatchdog();
-    };
-
-    rec.onresult = (e) => {
-      resetWatchdog(); // ancora vivo
-      let transcript = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        transcript += e.results[i][0].transcript;
-      }
-      const trimmed = transcript.trim();
-      if (trimmed) setMicStatus(true, '"' + trimmed + '"');
-
-      const spell = detectSpell(transcript);
-      if (!spell) return;
-      const now = Date.now();
-      if (now - lastFireTime < 1500) return;
-      lastFireTime = now;
-
-      const cfg = SPELL_CONFIGS[spell];
-      let charged = false;
-      ['Left', 'Right'].forEach(side => {
-        if (voiceState[side] === 'idle') {
-          voiceState[side]   = 'charged';
-          currentSpell[side] = spell;
-          charged = true;
-        }
-      });
-      if (charged) {
-        addLog(`${cfg.emoji} "${trimmed}" — pronto!`, 'Left');
-        showVoiceFeedback(trimmed);
-      }
-    };
-
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        stopped = true;
-        isRunning = false;
-        setMicStatus(false, 'Permesso negato');
-        return;
-      }
-      // no-speech, network, aborted: non fermare, onend riavvierà
-      if (e.error !== 'aborted') {
-        setMicStatus(false, e.error === 'no-speech' ? 'In ascolto...' : 'Mic: ' + e.error);
-      }
-    };
-
-    rec.onend = () => {
-      isRunning = false;
-      if (stopped) return;
-      // Riavvio immediato senza gap percepibile
-      setMicStatus(false, '↺ Riavvio...');
-      restartTimer = setTimeout(startRec, 80);
-      resetWatchdog();
-    };
-
-    try {
-      rec.start();
-    } catch(e) {
-      isRunning = false;
-      setMicStatus(false, 'Errore avvio');
-      restartTimer = setTimeout(startRec, 500);
+      return;
     }
-  }
+    // Altri errori non fatali: mostra il messaggio ma non fermare
+    setMicStatus(true, 'Mic: ' + e.error);
+  };
 
-  startRec();
+  rec.onend = () => {
+    // Il browser ha terminato la sessione (es. timeout del sistema operativo).
+    // Riavvia solo se non è stato negato il permesso.
+    if (permissionDenied) return;
+    setMicStatus(false, '↺ Riavvio...');
+    setTimeout(() => {
+      try { rec.start(); } catch(_) {}
+    }, 200);
+  };
+
+  try {
+    rec.start();
+  } catch(e) {
+    setMicStatus(false, 'Errore avvio mic');
+  }
 }
 
 // ── Spell visual configs ────────────────────────────────────────
