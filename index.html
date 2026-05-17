@@ -507,34 +507,62 @@ function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { addLog('Speech API non supportata', 'Left'); return; }
 
-  let rec = null;
-  let stopped = false;
-  let lastFireTime = 0;
-
   const micDot  = document.getElementById('micDot');
   const micText = document.getElementById('micText');
 
+  let rec         = null;
+  let stopped     = false;      // true solo se permesso negato
+  let isRunning   = false;      // true quando rec è attivamente in ascolto
+  let lastFireTime = 0;
+  let restartTimer = null;
+  let watchdog     = null;
+
   function setMicStatus(active, label) {
-    if (micDot)  micDot.style.background  = active ? '#ff9f00' : 'var(--muted)';
-    if (micDot)  micDot.style.boxShadow   = active ? '0 0 8px #ff9f00' : 'none';
+    if (micDot)  micDot.style.background = active ? '#ff9f00' : 'var(--muted)';
+    if (micDot)  micDot.style.boxShadow  = active ? '0 0 8px #ff9f00' : 'none';
     if (micText) micText.textContent = label;
   }
 
-  function build() {
+  // Watchdog: se dopo 3s il mic risulta spento, forza riavvio
+  function resetWatchdog() {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      if (!stopped && !isRunning) startRec();
+    }, 3000);
+  }
+
+  function startRec() {
+    if (stopped) return;
+    clearTimeout(restartTimer);
+
+    // Ferma l'istanza precedente senza triggerare onend ricorsivo
+    if (rec) {
+      rec.onend  = null;
+      rec.onerror = null;
+      try { rec.abort(); } catch(_) {}
+      rec = null;
+    }
+
+    isRunning = false;
     rec = new SR();
-    rec.lang = 'it-IT';
-    rec.continuous = true;
+    rec.lang           = 'it-IT';
+    rec.continuous     = true;
     rec.interimResults = true;
 
-    rec.onstart = () => setMicStatus(true, 'In ascolto...');
+    rec.onstart = () => {
+      isRunning = true;
+      setMicStatus(true, 'In ascolto...');
+      resetWatchdog();
+    };
 
     rec.onresult = (e) => {
+      resetWatchdog(); // ancora vivo
       let transcript = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         transcript += e.results[i][0].transcript;
       }
-      // Mostra sempre cosa sente
-      setMicStatus(true, '"' + transcript.trim() + '"');
+      const trimmed = transcript.trim();
+      if (trimmed) setMicStatus(true, '"' + trimmed + '"');
 
       if (!isFire(transcript)) return;
       const now = Date.now();
@@ -549,37 +577,43 @@ function initVoice() {
         }
       });
       if (charged) {
-        addLog('🔥 "' + transcript.trim() + '" — pronto!', 'Left');
-        showVoiceFeedback(transcript.trim());
+        addLog('🔥 "' + trimmed + '" — pronto!', 'Left');
+        showVoiceFeedback(trimmed);
       }
     };
 
     rec.onerror = (e) => {
-      if (e.error === 'not-allowed') {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         stopped = true;
+        isRunning = false;
         setMicStatus(false, 'Permesso negato');
         return;
       }
-      if (e.error === 'no-speech') {
-        setMicStatus(false, 'Nessun suono...');
-        return;
+      // no-speech, network, aborted: non fermare, onend riavvierà
+      if (e.error !== 'aborted') {
+        setMicStatus(false, e.error === 'no-speech' ? 'In ascolto...' : 'Mic: ' + e.error);
       }
-      setMicStatus(false, 'Errore: ' + e.error);
     };
 
     rec.onend = () => {
-      setMicStatus(false, 'Riavvio...');
-      if (!stopped) setTimeout(() => { build(); }, 200);
+      isRunning = false;
+      if (stopped) return;
+      // Riavvio immediato senza gap percepibile
+      setMicStatus(false, '↺ Riavvio...');
+      restartTimer = setTimeout(startRec, 80);
+      resetWatchdog();
     };
 
     try {
       rec.start();
     } catch(e) {
+      isRunning = false;
       setMicStatus(false, 'Errore avvio');
+      restartTimer = setTimeout(startRec, 500);
     }
   }
 
-  build();
+  startRec();
 }
 
 // ── Fireball particle system ────────────────────────────────────
