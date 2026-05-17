@@ -505,19 +505,11 @@ function initVoice() {
 
   const rec = new SR();
   rec.lang = 'it-IT';
-  rec.continuous = false;      // single-shot: più stabile su Edge
-  rec.interimResults = false;  // solo risultati finali
+  rec.continuous = true;
+  rec.interimResults = false;
 
-  let running = false;
   let lastFireTime = 0;
-
-  function startRec() {
-    if (running) return;
-    running = true;
-    try { rec.start(); } catch(_) { running = false; }
-  }
-
-  rec.onstart  = () => { running = true; };
+  let stopped = false;   // true solo se l'utente nega i permessi
 
   rec.onresult = (e) => {
     const transcript = e.results[e.results.length - 1][0].transcript;
@@ -539,20 +531,18 @@ function initVoice() {
   };
 
   rec.onerror = (e) => {
-    running = false;
     if (e.error === 'not-allowed') {
-      addLog('Microfono negato — controlla i permessi del sito', 'Left');
-      return; // non riprovare se i permessi sono negati
+      stopped = true;
+      addLog('Microfono negato — controlla i permessi', 'Left');
     }
+    // no-speech è normale, ignoriamo
   };
 
   rec.onend = () => {
-    running = false;
-    // Riavvia dopo una pausa per evitare il loop di permessi su Edge
-    setTimeout(startRec, 300);
+    if (!stopped) rec.start(); // riavvio immediato, stessa sessione
   };
 
-  startRec();
+  rec.start();
 }
 
 // ── Fireball particle system ────────────────────────────────────
@@ -691,8 +681,15 @@ startBtn.addEventListener('click', async () => {
   hands.onResults(onResults);
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-    video.srcObject = stream;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' },
+      audio: true   // chiedi mic e cam insieme, una sola volta
+    });
+    video.srcObject = new MediaStream(stream.getVideoTracks());
+    // Tieni vivo lo stream audio senza riprodurlo (evita l'eco)
+    const audioCtx = new AudioContext();
+    const src = audioCtx.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+    src.connect(audioCtx.createGain()); // gain disconnesso: silenzio ma stream attivo
     await video.play();
     loadingOverlay.style.display = 'none';
     statusText.textContent = 'Modello in caricamento...';
