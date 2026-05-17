@@ -275,9 +275,217 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-overlay p { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
+
+  /* ── Floating menu button ── */
+  #menuToggle {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 200;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-right: none;
+    border-radius: 10px 0 0 10px;
+    color: var(--accent);
+    width: 36px;
+    height: 64px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, color 0.2s;
+    writing-mode: vertical-rl;
+    letter-spacing: 0.1em;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    padding: 8px 4px;
+    gap: 0;
+    flex-direction: column;
+  }
+  #menuToggle:hover { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  #menuToggle.open  { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+  /* ── Slide-in drawer ── */
+  #cmdDrawer {
+    position: fixed;
+    top: 0; right: 0;
+    width: 300px;
+    height: 100vh;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    z-index: 190;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #cmdDrawer.open { transform: translateX(0); }
+
+  .drawer-header {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .drawer-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.01em;
+  }
+  .drawer-header p {
+    color: var(--muted);
+    font-size: 0.6rem;
+    margin-top: 4px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .drawer-body::-webkit-scrollbar { width: 4px; }
+  .drawer-body::-webkit-scrollbar-track { background: transparent; }
+  .drawer-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .drawer-section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .spell-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .spell-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .spell-card:hover { border-color: var(--accent3); background: #16161f; }
+  .spell-card .sc-emoji { font-size: 1.2rem; display: block; margin-bottom: 3px; }
+  .spell-card .sc-name  {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 0.68rem;
+    color: var(--text);
+    display: block;
+  }
+  .sc-word {
+    display: inline-block;
+    background: rgba(123,94,167,0.18);
+    color: var(--accent3);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin: 2px 2px 0 0;
+    font-size: 0.5rem;
+    letter-spacing: 0.04em;
+  }
+
+  .how-to-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .how-to-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.6rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .how-to-step:last-child { border-bottom: none; }
+  .step-num {
+    flex-shrink: 0;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(0,255,204,0.12);
+    color: var(--accent);
+    font-size: 0.55rem;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .how-to-step strong { color: var(--text); }
+
+  #drawerOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 185;
+  }
+  #drawerOverlay.open { display: block; }
 </style>
 </head>
 <body>
+
+<!-- ── Commands drawer overlay ── -->
+<div id="drawerOverlay"></div>
+
+<!-- ── Commands drawer ── -->
+<div id="cmdDrawer">
+  <div class="drawer-header">
+    <h2>🎙️ Comandi Vocali</h2>
+    <p>Di come usare gli incantesimi</p>
+  </div>
+  <div class="drawer-body">
+
+    <div>
+      <div class="drawer-section-title">Come funziona</div>
+      <div class="how-to-box">
+        <div class="how-to-step">
+          <div class="step-num">1</div>
+          <div>Premi <strong>Avvia Webcam</strong> per attivare il tracciamento e il microfono.</div>
+        </div>
+        <div class="how-to-step">
+          <div class="step-num">2</div>
+          <div>Di' ad alta voce il nome di un incantesimo (es. <strong>"fuoco"</strong> o <strong>"fire"</strong>).</div>
+        </div>
+        <div class="how-to-step">
+          <div class="step-num">3</div>
+          <div>Quando vedi <strong>"pronto!"</strong> nel log, <strong>apri la mano</strong> verso la webcam.</div>
+        </div>
+        <div class="how-to-step">
+          <div class="step-num">4</div>
+          <div><strong>Chiudi il pugno</strong> per fermare l'effetto. Poi scegli un nuovo incantesimo.</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="drawer-section-title">Incantesimi disponibili</div>
+      <div class="spell-grid" id="spellMenuGrid"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Toggle button ── -->
+<button id="menuToggle" title="Comandi vocali">📖<br>CMD</button>
 
 <header>
   <h1>Hand Tracker</h1>
@@ -987,6 +1195,43 @@ function onResults(results) {
     }
   });
 }
+
+// ── Commands drawer ────────────────────────────────────────────
+(function() {
+  const toggle  = document.getElementById('menuToggle');
+  const drawer  = document.getElementById('cmdDrawer');
+  const overlay = document.getElementById('drawerOverlay');
+  const grid    = document.getElementById('spellMenuGrid');
+
+  // Dati incantesimi per il menu (copiati da SPELL_KEYWORDS + emoji da SPELL_CONFIGS)
+  const MENU_DATA = [
+    { key:'fire',    emoji:'🔥', name:'Fuoco',     words:['fuoco','fire'] },
+    { key:'water',   emoji:'💧', name:'Acqua',     words:['acqua','water'] },
+    { key:'earth',   emoji:'🪨', name:'Terra',     words:['terra','earth'] },
+    { key:'air',     emoji:'💨', name:'Aria',      words:['aria','air','vento'] },
+    { key:'thunder', emoji:'⚡', name:'Fulmine',   words:['fulmine','thunder','tuono'] },
+    { key:'light',   emoji:'✨', name:'Luce',      words:['luce','light'] },
+    { key:'dark',    emoji:'🌑', name:'Ombra',     words:['ombra','dark','buio'] },
+    { key:'magic',   emoji:'🔮', name:'Magia',     words:['magia','magic'] },
+    { key:'death',   emoji:'💀', name:'Morte',     words:['morte','death'] },
+    { key:'green',   emoji:'🌿', name:'Natura',    words:['natura','green','verde'] },
+  ];
+
+  grid.innerHTML = MENU_DATA.map(s => `
+    <div class="spell-card">
+      <span class="sc-emoji">${s.emoji}</span>
+      <span class="sc-name">${s.name}</span>
+      <div style="margin-top:5px">${s.words.map(w => `<span class="sc-word">${w}</span>`).join('')}</div>
+    </div>
+  `).join('');
+
+  function openDrawer()  { drawer.classList.add('open'); overlay.classList.add('open'); toggle.classList.add('open'); toggle.title = 'Chiudi'; }
+  function closeDrawer() { drawer.classList.remove('open'); overlay.classList.remove('open'); toggle.classList.remove('open'); toggle.title = 'Comandi vocali'; }
+
+  toggle.addEventListener('click', () => drawer.classList.contains('open') ? closeDrawer() : openDrawer());
+  overlay.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+})();
 
 // ── Start camera ───────────────────────────────────────────────
 startBtn.addEventListener('click', async () => {
