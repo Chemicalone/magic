@@ -466,8 +466,12 @@
           <div>Di' ad alta voce il nome di un incantesimo (es. <strong>"fuoco"</strong> o <strong>"fire"</strong>).</div>
         </div>
         <div class="how-to-step">
-          <div class="step-num">3</div>
-          <div>Quando vedi <strong>"pronto!"</strong> nel log, <strong>apri la mano</strong> verso la webcam.</div>
+          <div class="step-num">3a</div>
+          <div>Quando vedi <strong>"pronto!"</strong> nel log, <strong>apri la mano</strong> verso la webcam per far apparire la sfera sul palmo.</div>
+        </div>
+        <div class="how-to-step">
+          <div class="step-num">3b</div>
+          <div><em>Oppure</em> dopo <strong>"pronto!"</strong>, alza <strong>solo l'indice</strong> per disegnare con la magia nell'aria!</div>
         </div>
         <div class="how-to-step">
           <div class="step-num">4</div>
@@ -1480,7 +1484,15 @@ function onResults(results) {
       const fingertipX = lm[8].x * canvas.width;
       const fingertipY = lm[8].y * canvas.height;
 
-      if (onlyIndex && voiceState[userSide] === 'burning') {
+      // Magic pen mode: only index up, spell must be charged or burning
+      const penActive = onlyIndex && (voiceState[userSide] === 'charged' || voiceState[userSide] === 'burning');
+
+      if (penActive) {
+        // Transition charged → burning when entering pen mode
+        if (voiceState[userSide] === 'charged') {
+          voiceState[userSide] = 'burning';
+          spells[userSide].setType(currentSpell[userSide]);
+        }
         // Magic pen: emit trail particles at fingertip
         const spellType = currentSpell[userSide];
         const cfg = SPELL_CONFIGS[spellType] || SPELL_CONFIGS.fire;
@@ -1503,12 +1515,14 @@ function onResults(results) {
       } else {
         clearPenTrail(userSide);
         if (isOpen) {
+          // Open hand: activate orb on palm
           if (vs === 'charged') {
             voiceState[userSide] = 'burning';
             spells[userSide].setType(currentSpell[userSide]);
           }
           if (voiceState[userSide] === 'burning') spells[userSide].spawn(palmCx, palmCy);
         } else {
+          // Hand closed (and not in pen mode): stop effect
           if (vs === 'burning') {
             voiceState[userSide] = 'idle';
             spells[userSide].deactivate();
