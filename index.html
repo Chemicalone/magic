@@ -2,1637 +2,1091 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hand Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Magia Elementale</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #0a0a0f;
-    --panel: #111118;
-    --border: #1e1e2e;
-    --accent: #00ffcc;
-    --accent2: #ff3cac;
-    --accent3: #7b5ea7;
-    --left: #00ffcc;
-    --right: #ff3cac;
-    --text: #e0e0f0;
-    --muted: #555577;
-  }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Space Mono', monospace;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px 16px;
-    gap: 20px;
-  }
-
-  header { text-align: center; }
-
-  header h1 {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: clamp(1.8rem, 4vw, 2.8rem);
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  header p {
-    color: var(--muted);
-    font-size: 0.78rem;
-    margin-top: 6px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .main-grid {
-    display: grid;
-    grid-template-columns: 210px 1fr 210px;
-    gap: 14px;
-    width: 100%;
-    max-width: 1100px;
-    align-items: start;
-  }
-
-  @media (max-width: 800px) {
-    .main-grid { grid-template-columns: 1fr; }
-    .panel-left  { order: 2; }
-    .video-col   { order: 1; }
-    .panel-right { order: 3; }
-  }
-
-  .video-col { display: flex; flex-direction: column; gap: 12px; }
-
-  .video-wrap {
-    position: relative;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    background: #000;
-    aspect-ratio: 4/3;
-  }
-
-  #videoEl {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    transform: scaleX(-1);
-    display: block;
-  }
-
-  #canvasEl {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    transform: scaleX(-1);
-  }
-
-  .status-bar {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(8px);
-    padding: 8px 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
-  }
-
-  .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition: background 0.3s;
-    flex-shrink: 0;
-  }
-  .dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-  }
-
-  .card-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.62rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    margin-bottom: 10px;
-  }
-
-  .action-log {
-    max-height: 100px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column-reverse;
-    gap: 4px;
-  }
-
-  .log-entry {
-    font-size: 0.62rem;
-    padding: 3px 8px;
-    border-radius: 4px;
-    border-left: 2px solid var(--accent3);
-    color: var(--muted);
-    animation: fadeIn 0.3s ease;
-  }
-  .log-entry.left-log  { border-left-color: var(--left); }
-  .log-entry.right-log { border-left-color: var(--right); }
-
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-
-  #startBtn {
-    width: 100%;
-    padding: 11px;
-    border-radius: 8px;
-    border: 1px solid var(--accent);
-    background: transparent;
-    color: var(--accent);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.78rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  #startBtn:hover  { background: var(--accent); color: var(--bg); }
-  #startBtn:disabled { border-color: var(--muted); color: var(--muted); cursor: not-allowed; }
-
-  .panel-left, .panel-right {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    transition: opacity 0.3s;
-  }
-  .panel-left.inactive, .panel-right.inactive { opacity: 0.3; }
-
-  .hand-label {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    font-weight: 800;
-    padding: 3px 10px;
-    border-radius: 6px;
-    display: inline-block;
-    margin-bottom: 6px;
-  }
-  .hand-label.left  { background: rgba(0,255,204,0.12); color: var(--left); }
-  .hand-label.right { background: rgba(255,60,172,0.12); color: var(--right); }
-
-  .gesture-display {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.25rem;
-    font-weight: 800;
-    min-height: 1.5rem;
-    letter-spacing: -0.02em;
-    transition: color 0.2s;
-  }
-  .gesture-display.left  { color: var(--left); }
-  .gesture-display.right { color: var(--right); }
-
-  .gesture-emoji { font-size: 1.9rem; margin-bottom: 4px; display: block; }
-
-  .fingers-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
-    margin-top: 4px;
-  }
-
-  .finger-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    font-size: 0.52rem;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-
-  .finger-bar {
-    width: 100%;
-    height: 28px;
-    border-radius: 4px;
-    background: var(--border);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .finger-fill {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 0%;
-    border-radius: 4px;
-    transition: height 0.1s ease;
-  }
-  .finger-fill.left  { background: linear-gradient(to top, var(--left), #00ffcc55); }
-  .finger-fill.right { background: linear-gradient(to top, var(--right), #ff3cac55); }
-
-  .coords-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.65rem;
-    padding: 3px 0;
-    border-bottom: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .coords-row:last-child { border-bottom: none; }
-  .coords-row span:last-child { color: var(--text); font-weight: 700; }
-
-  .loading-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(10,10,15,0.9);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    z-index: 10;
-  }
-
-  .spinner {
-    width: 36px; height: 36px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-overlay p { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
-
-  /* ── Floating menu button ── */
-  #menuToggle {
-    position: fixed;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 200;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-right: none;
-    border-radius: 10px 0 0 10px;
-    color: var(--accent);
-    width: 36px;
-    height: 64px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s, color 0.2s;
-    writing-mode: vertical-rl;
-    letter-spacing: 0.1em;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    padding: 8px 4px;
-    gap: 0;
-    flex-direction: column;
-  }
-  #menuToggle:hover { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-  #menuToggle.open  { background: var(--accent2); color: #fff; border-color: var(--accent2); }
-
-  /* ── Slide-in drawer ── */
-  #cmdDrawer {
-    position: fixed;
-    top: 0; right: 0;
-    width: 300px;
-    height: 100vh;
-    background: var(--panel);
-    border-left: 1px solid var(--border);
-    z-index: 190;
-    transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(.4,0,.2,1);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  #cmdDrawer.open { transform: translateX(0); }
-
-  .drawer-header {
-    padding: 20px 18px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .drawer-header h2 {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 1rem;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    letter-spacing: -0.01em;
-  }
-  .drawer-header p {
-    color: var(--muted);
-    font-size: 0.6rem;
-    margin-top: 4px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .drawer-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 14px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .drawer-body::-webkit-scrollbar { width: 4px; }
-  .drawer-body::-webkit-scrollbar-track { background: transparent; }
-  .drawer-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-  .drawer-section-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.58rem;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-
-  .spell-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 7px;
-  }
-
-  .spell-card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 9px 10px;
-    transition: border-color 0.2s, background 0.2s;
-  }
-  .spell-card:hover { border-color: var(--accent3); background: #16161f; }
-  .spell-card .sc-emoji { font-size: 1.2rem; display: block; margin-bottom: 3px; }
-  .spell-card .sc-name  {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 0.68rem;
-    color: var(--text);
-    display: block;
-  }
-  .sc-word {
-    display: inline-block;
-    background: rgba(123,94,167,0.18);
-    color: var(--accent3);
-    border-radius: 3px;
-    padding: 1px 5px;
-    margin: 2px 2px 0 0;
-    font-size: 0.5rem;
-    letter-spacing: 0.04em;
-  }
-
-  .how-to-box {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-  }
-  .how-to-step {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.6rem;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-  .how-to-step:last-child { border-bottom: none; }
-  .step-num {
-    flex-shrink: 0;
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: rgba(0,255,204,0.12);
-    color: var(--accent);
-    font-size: 0.55rem;
-    font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-    margin-top: 1px;
-  }
-  .how-to-step strong { color: var(--text); }
-
-  #drawerOverlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 185;
-  }
-  #drawerOverlay.open { display: block; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #04040a;
+  color: rgba(255,255,255,0.9);
+  font-family: 'Cinzel', serif;
+  overflow: hidden;
+  height: 100vh; width: 100vw;
+  user-select: none; -webkit-user-select: none;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 999; opacity: 0.5;
+}
+#effectCanvas { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+#drawCanvas   { position: fixed; inset: 0; z-index: 2; cursor: crosshair; touch-action: none; }
+#topBar {
+  position: fixed; top: 0; left: 0; right: 0;
+  padding: 20px 20px 12px; z-index: 10;
+  pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+#title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(0.75em, 2.5vw, 1.1em);
+  letter-spacing: 0.35em; color: rgba(255,255,255,0.18); text-transform: uppercase;
+}
+#status {
+  font-size: clamp(0.65em, 2vw, 0.85em);
+  letter-spacing: 0.18em; color: rgba(255,255,255,0.55);
+  text-align: center; min-height: 1.3em; transition: color 0.4s ease;
+}
+#status.error { color: rgba(255,100,80,0.9); }
+#elementBadge {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 22px; border-radius: 40px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+  transition: all 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  opacity: 0; transform: translateY(-8px) scale(0.95);
+}
+#elementBadge.visible { opacity: 1; transform: translateY(0) scale(1); }
+#elementIcon { font-size: 1.3em; }
+#elementNameEl { font-size: 0.9em; letter-spacing: 0.3em; font-weight: 700; }
+#resultOverlay {
+  position: fixed; inset: 0; z-index: 8;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none; opacity: 0; transition: opacity 0.7s ease;
+}
+#resultOverlay.visible { opacity: 1; }
+#resultMain {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(2.8em, 11vw, 6.5em); font-weight: 700;
+  letter-spacing: 0.08em; text-align: center; line-height: 1;
+  animation: glowPulse 2.2s ease-in-out infinite;
+}
+#resultSub {
+  font-size: clamp(0.6em, 1.8vw, 0.88em);
+  letter-spacing: 0.5em; opacity: 0.65; margin-top: 18px; text-align: center;
+}
+@keyframes glowPulse {
+  0%,100% { text-shadow: 0 0 30px currentColor, 0 0 70px currentColor; }
+  50%      { text-shadow: 0 0 50px currentColor, 0 0 110px currentColor, 0 0 15px #fff; }
+}
+#bottomBar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  padding: 14px 20px 20px; z-index: 10;
+  display: flex; justify-content: space-between; align-items: flex-end;
+}
+#legend { pointer-events: none; display: flex; flex-direction: column; gap: 5px; }
+.leg {
+  font-size: clamp(0.48em, 1.4vw, 0.62em); letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.22); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.leg span { color: rgba(255,255,255,0.38); }
+#clearBtn {
+  background: none; border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.35); padding: 9px 18px; border-radius: 30px;
+  cursor: pointer; font-family: 'Cinzel', serif;
+  font-size: clamp(0.55em, 1.5vw, 0.7em); letter-spacing: 0.22em; transition: all 0.25s;
+}
+#clearBtn:hover, #clearBtn:active { border-color: rgba(255,255,255,0.38); color: rgba(255,255,255,0.8); }
+#tapHint {
+  position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+  font-size: clamp(0.5em, 1.4vw, 0.62em); letter-spacing: 0.3em;
+  color: rgba(255,255,255,0.28); z-index: 10; pointer-events: none;
+  opacity: 0; text-align: center; white-space: nowrap;
+}
+#tapHint.show { animation: hintFade 4s ease 1.2s forwards; }
+@keyframes hintFade { 0%{opacity:0} 25%{opacity:1} 80%{opacity:1} 100%{opacity:0.3} }
 </style>
 </head>
 <body>
-
-<!-- ── Commands drawer overlay ── -->
-<div id="drawerOverlay"></div>
-
-<!-- ── Commands drawer ── -->
-<div id="cmdDrawer">
-  <div class="drawer-header">
-    <h2>🎙️ Comandi Vocali</h2>
-    <p>Di come usare gli incantesimi</p>
-  </div>
-  <div class="drawer-body">
-
-    <div>
-      <div class="drawer-section-title">Come funziona</div>
-      <div class="how-to-box">
-        <div class="how-to-step">
-          <div class="step-num">1</div>
-          <div>Premi <strong>Avvia Webcam</strong> per attivare il tracciamento e il microfono.</div>
-        </div>
-        <div class="how-to-step">
-          <div class="step-num">2</div>
-          <div>Di' ad alta voce il nome di un incantesimo (es. <strong>"fuoco"</strong> o <strong>"fire"</strong>).</div>
-        </div>
-        <div class="how-to-step">
-          <div class="step-num">3a</div>
-          <div>Quando vedi <strong>"pronto!"</strong> nel log, <strong>apri la mano</strong> verso la webcam per far apparire la sfera sul palmo.</div>
-        </div>
-        <div class="how-to-step">
-          <div class="step-num">3b</div>
-          <div><em>Oppure</em> dopo <strong>"pronto!"</strong>, alza <strong>solo l'indice</strong> per disegnare con la magia nell'aria!</div>
-        </div>
-        <div class="how-to-step">
-          <div class="step-num">4</div>
-          <div>Con la mano aperta di' <strong>"spara"</strong>, <strong>"shoot"</strong>, <strong>"vai"</strong> o <strong>"go"</strong> per lanciare un colpo esplosivo!</div>
-        </div>
-        <div class="how-to-step">
-          <div class="step-num">5</div>
-          <div><strong>Chiudi il pugno</strong> per fermare l'effetto. Poi scegli un nuovo incantesimo.</div>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div class="drawer-section-title">Incantesimi disponibili</div>
-      <div class="spell-grid" id="spellMenuGrid"></div>
-    </div>
-
-  </div>
+<canvas id="effectCanvas"></canvas>
+<canvas id="drawCanvas"></canvas>
+<div id="topBar">
+  <div id="title">Magia Elementale</div>
+  <div id="status">Disegna il simbolo di un elemento</div>
+  <div id="elementBadge"><span id="elementIcon"></span><span id="elementNameEl"></span><span id="comboChain" style="font-size:0.8em;letter-spacing:0.15em;opacity:0.7;margin-left:4px;"></span></div>
 </div>
+<div id="resultOverlay"><div id="resultMain"></div><div id="resultSub"></div></div>
+<div id="tapHint">✦ tocca per ricominciare ✦</div>
 
-<!-- ── Toggle button ── -->
-<button id="menuToggle" title="Comandi vocali">📖<br>CMD</button>
-
-<header>
-  <h1>Hand Tracker</h1>
-  <p>MediaPipe · Rilevamento 2 mani in tempo reale</p>
-</header>
-
-<div class="main-grid">
-
-  <!-- ══ LEFT HAND panel ══ -->
-  <div class="panel-left inactive" id="panelLeft">
-    <div class="card">
-      <span class="hand-label left">← Sinistra</span>
-      <span class="gesture-emoji" id="emojiLeft">🤚</span>
-      <div class="gesture-display left" id="gestureLeft">—</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Dita alzate</div>
-      <div class="fingers-grid" id="fingersLeft"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Posizione palmo</div>
-      <div class="coords-row"><span>X</span><span id="lx">—</span></div>
-      <div class="coords-row"><span>Y</span><span id="ly">—</span></div>
-    </div>
-  </div>
-
-  <!-- ══ VIDEO column ══ -->
-  <div class="video-col">
-    <div class="video-wrap">
-      <video id="videoEl" playsinline autoplay muted></video>
-      <canvas id="canvasEl"></canvas>
-      <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner"></div>
-        <p>Caricamento modello...</p>
-      </div>
-      <div class="status-bar">
-        <div class="dot" id="statusDot"></div>
-        <span id="statusText">In attesa...</span>
-        <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-          <div class="dot" id="micDot"></div>
-          <span id="micText" style="color:var(--muted); font-size:0.68rem;">Mic off</span>
-        </span>
-      </div>
-      <!-- voice feedback toast -->
-      <div id="voiceFeedback" style="
-        position: absolute; top: 12px; left: 50%; transform: translateX(-50%) translateY(-8px);
-        background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-        color: #ff9f00; font-family: 'Space Mono', monospace; font-size: 0.78rem;
-        padding: 5px 14px; border-radius: 20px; border: 1px solid #ff9f0055;
-        opacity: 0; transition: opacity 0.25s, transform 0.25s;
-        pointer-events: none; white-space: nowrap; letter-spacing: 0.06em;
-      "></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Log azioni</div>
-      <div class="action-log" id="actionLog">
-        <div class="log-entry">In attesa di rilevamento...</div>
-      </div>
-    </div>
-    <button id="startBtn">▶ Avvia Webcam</button>
-  </div>
-
-  <!-- ══ RIGHT HAND panel ══ -->
-  <div class="panel-right inactive" id="panelRight">
-    <div class="card">
-      <span class="hand-label right">Destra →</span>
-      <span class="gesture-emoji" id="emojiRight">🤚</span>
-      <div class="gesture-display right" id="gestureRight">—</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Dita alzate</div>
-      <div class="fingers-grid" id="fingersRight"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Posizione palmo</div>
-      <div class="coords-row"><span>X</span><span id="rx">—</span></div>
-      <div class="coords-row"><span>Y</span><span id="ry">—</span></div>
-    </div>
-  </div>
-
+<div id="bottomBar">
+  <button id="clearBtn">↺ RESET</button>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
 
 <script>
-const video          = document.getElementById('videoEl');
-const canvas         = document.getElementById('canvasEl');
-const ctx            = canvas.getContext('2d');
-const statusDot      = document.getElementById('statusDot');
-const statusText     = document.getElementById('statusText');
-const actionLog      = document.getElementById('actionLog');
-const loadingOverlay = document.getElementById('loadingOverlay');
-const startBtn       = document.getElementById('startBtn');
-
-const FINGER_NAMES = ['Pollice', 'Indice', 'Medio', 'Anulare', 'Mignolo'];
-const FINGER_TIPS  = [4, 8, 12, 16, 20];
-const FINGER_PIP   = [3, 6, 10, 14, 18];
-
-// Build finger bars for both panels
-['Left', 'Right'].forEach(side => {
-  const cls  = side.toLowerCase();
-  const grid = document.getElementById(`fingers${side}`);
-  FINGER_NAMES.forEach((name, i) => {
-    grid.innerHTML += `
-      <div class="finger-item">
-        <div class="finger-bar">
-          <div class="finger-fill ${cls}" id="f${side}${i}"></div>
-        </div>
-        <span>${name.slice(0, 3)}</span>
-      </div>`;
-  });
-});
-
-// ── Thumb & finger detection ────────────────────────────────────
-function isFingerUp(landmarks, fingerIdx) {
-  if (fingerIdx === 0) {
-    const ref      = landmarks[17]; // MCP mignolo
-    const tipDist  = Math.hypot(landmarks[4].x - ref.x, landmarks[4].y - ref.y);
-    const baseDist = Math.hypot(landmarks[2].x - ref.x, landmarks[2].y - ref.y);
-    return tipDist > baseDist;
-  }
-  return landmarks[FINGER_TIPS[fingerIdx]].y < landmarks[FINGER_PIP[fingerIdx]].y;
-}
-
-function detectGesture(landmarks, fingersUp) {
-  const [thumb, index, middle, ring, pinky] = fingersUp;
-  const sum = fingersUp.filter(Boolean).length;
-  if (sum === 0)                                      return { name: 'Pugno',        emoji: '✊'  };
-  if (sum === 5)                                      return { name: 'Mano aperta',  emoji: '🖐️' };
-  if (!thumb && index && !middle && !ring && !pinky)  return { name: 'Punta',        emoji: '👆'  };
-  if (!thumb && index && middle && !ring && !pinky)   return { name: 'Vittoria',     emoji: '✌️' };
-  if (thumb && index && !middle && !ring && !pinky)   return { name: 'L / Pistola',  emoji: '🤙' };
-  if (thumb && !index && !middle && !ring && pinky)   return { name: 'Shaka',        emoji: '🤙' };
-  if (!thumb && index && middle && ring && pinky)     return { name: 'Quattro dita', emoji: '🖖'  };
-  if (!thumb && !index && !middle && !ring && pinky)  return { name: 'Mignolo',      emoji: '🤙' };
-  if (thumb && index && middle && !ring && !pinky)    return { name: 'Tre dita',     emoji: '👌'  };
-  if (sum === 1 && thumb)                             return { name: 'Pollice su',   emoji: '👍'  };
-  return { name: `${sum} dita`, emoji: '👋' };
-}
-
-// ── Log ────────────────────────────────────────────────────────
-let logEntries = [];
-const lastGesture = { Left: '', Right: '' };
-
-function addLog(text, side) {
-  const cls   = side === 'Left' ? 'left-log' : 'right-log';
-  const label = side === 'Left' ? '← Sin' : 'Des →';
-  logEntries.unshift(
-    `<div class="log-entry ${cls}">${new Date().toLocaleTimeString('it-IT')} [${label}] ${text}</div>`
-  );
-  if (logEntries.length > 30) logEntries.pop();
-  actionLog.innerHTML = logEntries.join('');
-}
-
-// ── Per-hand drawing colours ────────────────────────────────────
-const COLORS = {
-  Left:  { connector: '#00ffcc44', landmark: '#00ffcc', fill: '#00ffcc33' },
-  Right: { connector: '#ff3cac44', landmark: '#ff3cac', fill: '#ff3cac33' },
+// ─── Definizioni ──────────────────────────────────────────────────────────────
+const ELEMENTS = {
+  LUCE:     { icon:'✕', color:'#FFE566', glow:[255,220,80],  name:'LUCE' },
+  OMBRA:    { icon:'∞', color:'#B46EFF', glow:[150,80,230],  name:'OMBRA' },
+  FUOCO:    { icon:'🔥', color:'#FF6830', glow:[255,95,40],   name:'FUOCO' },
+  GHIACCIO: { icon:'❄', color:'#7DDEFF', glow:[100,200,255], name:'GHIACCIO' },
+  ARIA:     { icon:'〜', color:'#6FFFBA', glow:[90,255,170],  name:'ARIA' },
+  ERBA:     { icon:'🌿', color:'#5FE644', glow:[80,210,60],   name:'ERBA' },
 };
+const MODE_LABELS = { SFERA:'Sfera', VERTICALE:'Raggio Verticale', DIAGONALE:'Raggio Diagonale', ORIZZONTALE:'Raggio Orizzontale' };
 
-// ── Update one hand panel ───────────────────────────────────────
-function updatePanel(lm, modelLabel) {
-  // MediaPipe labels are from model POV (unmirrored).
-  // Since we mirror the video, we swap Left ↔ Right for the user.
-  const userSide = modelLabel === 'Left' ? 'Right' : 'Left';
+// ─── Combo ────────────────────────────────────────────────────────────────────
+const COMBOS = [
+  { elements:['FUOCO','GHIACCIO'],                    name:'ACQUA',    color:'#4FC3F7', glow:[50,180,255],   desc:'Il fuoco incontra il ghiaccio' },
+  { elements:['OMBRA','ARIA'],                         name:'FUMOGENA', color:'#9E9E9E', glow:[160,160,180],  desc:'Oscurità e vento si fondono' },
+  { elements:['FUOCO','ARIA'],                         name:'FULMINE',  color:'#FFF176', glow:[255,240,100],  desc:'Calore e vento generano scarica' },
+  { elements:['ERBA','GHIACCIO','FUOCO'],              name:'FANGO',    color:'#8D6E63', glow:[140,100,80],   desc:'Terra, ghiaccio e fuoco si mescolano' },
+  { elements:['ERBA','GHIACCIO','FUOCO','FUOCO'],      name:'ROCCIA',   color:'#B0BEC5', glow:[160,175,185],  desc:'La terra si solidifica' },
+  { elements:['ERBA','GHIACCIO','FUOCO','FUOCO','FUOCO'], name:'LAVA',  color:'#FF5722', glow:[255,80,20],    desc:'La roccia fonde in magma ardente' },
+];
+COMBOS.forEach(c => { c._key = [...c.elements].sort().join(','); });
+function matchCombo(elArr) {
+  const k = [...elArr].sort().join(',');
+  return COMBOS.find(c => c._key === k) || null;
+}
 
-  document.getElementById(`panel${userSide}`).classList.remove('inactive');
+// ─── Canvas ───────────────────────────────────────────────────────────────────
+const drawCanvas   = document.getElementById('drawCanvas');
+const effectCanvas = document.getElementById('effectCanvas');
+const dctx = drawCanvas.getContext('2d');
+const ectx = effectCanvas.getContext('2d');
 
-  const fingersUp = FINGER_TIPS.map((_, i) => isFingerUp(lm, i));
-  fingersUp.forEach((up, i) => {
-    const el = document.getElementById(`f${userSide}${i}`);
-    if (el) el.style.height = up ? '100%' : '12%';
-  });
+function resize() {
+  [drawCanvas, effectCanvas].forEach(c => { c.width = window.innerWidth; c.height = window.innerHeight; });
+}
+resize();
+window.addEventListener('resize', resize);
 
-  const wrist = lm[0];
-  document.getElementById(userSide === 'Left' ? 'lx' : 'rx').textContent = (wrist.x * 100).toFixed(1) + '%';
-  document.getElementById(userSide === 'Left' ? 'ly' : 'ry').textContent = (wrist.y * 100).toFixed(1) + '%';
+// ─── Disegno ──────────────────────────────────────────────────────────────────
+let drawing=false, hasDrawn=false, drawTimer=null;
+let allPoints = [];    // tutti i punti concatenati (per riconoscimenti single-stroke)
+let allStrokes = [];   // array di array — ogni tratto separato
+let currentStroke = [];
 
-  const gesture = detectGesture(lm, fingersUp);
-  document.getElementById(`emoji${userSide}`).textContent   = gesture.emoji;
-  document.getElementById(`gesture${userSide}`).textContent = gesture.name;
+function applyStrokeStyle(hex) {
+  dctx.strokeStyle=hex; dctx.shadowColor=hex; dctx.shadowBlur=14;
+  dctx.lineWidth=3; dctx.lineCap='round'; dctx.lineJoin='round';
+}
+applyStrokeStyle('rgba(255,255,255,0.92)');
 
-  if (gesture.name !== lastGesture[userSide]) {
-    addLog(gesture.name, userSide);
-    lastGesture[userSide] = gesture.name;
+function pos(e) {
+  const r = drawCanvas.getBoundingClientRect();
+  return e.touches && e.touches.length
+    ? { x:e.touches[0].clientX-r.left, y:e.touches[0].clientY-r.top }
+    : { x:e.clientX-r.left, y:e.clientY-r.top };
+}
+
+function onStart(e) {
+  if (appState==='SHOWING') return;
+  e.preventDefault();
+  drawing=true; hasDrawn=true;
+  currentStroke = [];
+  const p=pos(e);
+  currentStroke.push({x:p.x, y:p.y});
+  allPoints.push({x:p.x, y:p.y});
+  dctx.beginPath(); dctx.moveTo(p.x,p.y);
+  clearTimeout(drawTimer);
+}
+function onMove(e) {
+  if (!drawing||appState==='SHOWING') return;
+  e.preventDefault();
+  const p=pos(e);
+  currentStroke.push({x:p.x, y:p.y});
+  allPoints.push({x:p.x, y:p.y});
+  dctx.lineTo(p.x,p.y); dctx.stroke();
+  dctx.beginPath(); dctx.moveTo(p.x,p.y);
+}
+function onEnd(e) {
+  if (!drawing) return;
+  e.preventDefault(); drawing=false; dctx.beginPath();
+  if (currentStroke.length > 2) allStrokes.push([...currentStroke]);
+  currentStroke = [];
+  clearTimeout(drawTimer);
+  if (hasDrawn && appState!=='SHOWING') drawTimer=setTimeout(recognizeShape, 900);
+}
+
+drawCanvas.addEventListener('mousedown',  onStart);
+drawCanvas.addEventListener('mousemove',  onMove);
+drawCanvas.addEventListener('mouseup',    onEnd);
+drawCanvas.addEventListener('mouseleave', onEnd);
+drawCanvas.addEventListener('touchstart', onStart, {passive:false});
+drawCanvas.addEventListener('touchmove',  onMove,  {passive:false});
+drawCanvas.addEventListener('touchend',   onEnd,   {passive:false});
+
+// ─── Stato app ────────────────────────────────────────────────────────────────
+let appState='WAITING_ELEMENT', detectedElement=null, animId=null;
+let comboChain = [];   // elementi accumulati finora
+
+const statusEl      = document.getElementById('status');
+const badgeEl       = document.getElementById('elementBadge');
+const iconEl        = document.getElementById('elementIcon');
+const nameEl        = document.getElementById('elementNameEl');
+const comboChainEl  = document.getElementById('comboChain');
+const clearBtn      = document.getElementById('clearBtn');
+const resultMain    = document.getElementById('resultMain');
+const resultSub     = document.getElementById('resultSub');
+const tapHint       = document.getElementById('tapHint');
+
+
+// ─── RICONOSCIMENTO GEOMETRICO ────────────────────────────────────────────────
+
+function getStats(pts) {
+  if (!pts.length) return null;
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs);
+  const minY=Math.min(...ys), maxY=Math.max(...ys);
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const w=maxX-minX, h=maxY-minY;
+  const diag=Math.hypot(w,h);
+
+  // Distanza media dal centro
+  const dists = pts.map(p=>Math.hypot(p.x-cx,p.y-cy));
+  const avgDist = dists.reduce((a,b)=>a+b,0)/dists.length;
+  const maxDist = Math.max(...dists);
+  // Circolarità: quanto è uniforme la distanza dal centro
+  const distStd = Math.sqrt(dists.map(d=>(d-avgDist)**2).reduce((a,b)=>a+b,0)/dists.length);
+  const circularity = distStd / (avgDist||1);
+
+  // Angolo totale percorso
+  let totalAngle = 0;
+  for (let i=1; i<pts.length-1; i++) {
+    const a1 = Math.atan2(pts[i].y-pts[i-1].y, pts[i].x-pts[i-1].x);
+    const a2 = Math.atan2(pts[i+1].y-pts[i].y, pts[i+1].x-pts[i].x);
+    let da = a2-a1;
+    while(da> Math.PI) da-=2*Math.PI;
+    while(da<-Math.PI) da+=2*Math.PI;
+    totalAngle += da;
   }
 
-  return userSide;
-}
-
-function resetPanel(side) {
-  document.getElementById(`panel${side}`).classList.add('inactive');
-  document.getElementById(`emoji${side}`).textContent   = '🤚';
-  document.getElementById(`gesture${side}`).textContent = '—';
-  document.getElementById(side === 'Left' ? 'lx' : 'rx').textContent = '—';
-  document.getElementById(side === 'Left' ? 'ly' : 'ry').textContent = '—';
-  FINGER_NAMES.forEach((_, i) => {
-    const el = document.getElementById(`f${side}${i}`);
-    if (el) el.style.height = '0%';
-  });
-  lastGesture[side] = '';
-}
-
-// ── Voice state machine ─────────────────────────────────────────
-// idle → charged (dopo keyword) → burning (mano aperta) → idle (mano chiusa)
-const voiceState   = { Left: 'idle', Right: 'idle' };
-// Last known palm positions (canvas coords) — updated every frame
-const palmPos = { Left: { x: 0, y: 0 }, Right: { x: 0, y: 0 } };
-// Index fingertip positions for shoot direction
-const indexPos = { Left: { x: 0, y: 0 }, Right: { x: 0, y: 0 } };
-
-// ── Magic Pen trail system ──────────────────────────────────────
-// Live particles emitted from the fingertip, age and fade over ~2s
-const penParticles = { Left: [], Right: [] };
-
-function emitPenParticles(side, x, y, spellType) {
-  const cfg = SPELL_CONFIGS[spellType] || SPELL_CONFIGS.fire;
-  // Emit 4 particles per frame at the fingertip
-  for (let i = 0; i < 4; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const p = cfg.spawn(x, y, angle);
-    p.vx *= 0.12;  // almost stationary — stick to the path
-    p.vy *= 0.12;
-    p.size *= 0.85;
-    p.decay *= 0.28; // live ~2s (decay slowed way down)
-    penParticles[side].push(p);
-  }
-}
-
-function updatePenParticles(ctx) {
-  ['Left', 'Right'].forEach(side => {
-    const cfg_cache = {};
-    penParticles[side] = penParticles[side].filter(p => p.life > 0);
-    penParticles[side].forEach(p => {
-      const cfg = cfg_cache[p._type] || (cfg_cache[p._type] = SPELL_CONFIGS[p._type] || SPELL_CONFIGS.fire);
-      cfg.update(p);
-      cfg.draw(ctx, p);
-    });
-  });
-}
-
-function clearPenTrail(side) {
-  penParticles[side] = [];
-}
-const currentSpell = { Left: 'fire', Right: 'fire' };
-
-// Keyword espanse con varianti fonetiche che Chrome IT trascrive male
-const SPELL_KEYWORDS = {
-  fire:    ['fire', 'fuoco', 'fai', 'vai fuoco', 'feu', 'feuer', 'fuego', 'faio', 'fayo', 'firo', 'faire'],
-  // shoot trigger — handled separately, not a spell
-  _shoot:  ['shoot', 'spara', 'sparare', 'via', 'vai', 'go', 'fuoco via', 'lancia'],
-  light:   ['light', 'luce', 'lux', 'lait', 'lai', 'like', 'lights'],
-  dark:    ['dark', 'ombra', 'oscuro', 'oscura', 'buio', 'darck', 'darc'],
-  magic:   ['magic', 'magia', 'magica', 'magi', 'maja', 'magico'],
-  death:   ['death', 'morte', 'morta', 'morto', 'det', 'def', 'deth'],
-  green:   ['green', 'natura', 'verde', 'grin', 'gryn', 'gren'],
-  thunder: ['thunder', 'fulmine', 'fulmini', 'tuono', 'sander', 'tandar'],
-  earth:   ['earth', 'terra', 'ert', 'erth', 'hearth'],
-  air:     ['air', 'aria', 'vento', 'ari', 'are'],
-  water:   ['water', 'acqua', 'acqu', 'wata', 'watter', 'uater'],
-};
-
-// Normalizza: rimuove accenti, punteggiatura, maiuscole
-function normalizeStr(s) {
-  return s.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ')
-    .replace(/\s+/g, ' ').trim();
-}
-
-function detectSpell(t) {
-  const norm = normalizeStr(t);
-  for (const [spell, words] of Object.entries(SPELL_KEYWORDS)) {
-    if (words.some(w => norm.includes(normalizeStr(w)))) return spell;
-  }
-  return null;
-}
-
-function showVoiceFeedback(word) {
-  const el = document.getElementById('voiceFeedback');
-  if (!el) return;
-  el.textContent = '🎙️ "' + word + '"';
-  el.style.opacity = '1';
-  el.style.transform = 'translateY(0)';
-  clearTimeout(el._t);
-  el._t = setTimeout(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(-8px)';
-  }, 1500);
-}
-
-function initVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { addLog('Speech API non supportata', 'Left'); return; }
-
-  const micDot  = document.getElementById('micDot');
-  const micText = document.getElementById('micText');
-
-  let lastFireTime     = 0;
-  let permissionDenied = false;
-  let isStarting       = false;
-  let currentRec       = null;
-
-  function setMicStatus(active, label) {
-    if (micDot)  micDot.style.background = active ? '#ff9f00' : 'var(--muted)';
-    if (micDot)  micDot.style.boxShadow  = active ? '0 0 8px #ff9f00' : 'none';
-    if (micText) micText.textContent = label;
+  // Conteggio inversioni verticali (per onde)
+  let waveCount = 0;
+  let lastDir = 0;
+  for (let i=1; i<pts.length; i++) {
+    const dy = pts[i].y - pts[i-1].y;
+    const dir = dy > 1 ? 1 : dy < -1 ? -1 : 0;
+    if (dir !== 0 && dir !== lastDir && lastDir !== 0) waveCount++;
+    if (dir !== 0) lastDir = dir;
   }
 
-  function makeRec() {
-    if (permissionDenied || isStarting) return;
-    isStarting = true;
-
-    const r = new SR();
-    r.lang            = 'it-IT';
-    r.continuous      = true;
-    r.interimResults  = false; // solo risultati finali: molto più affidabili
-    r.maxAlternatives = 3;     // considera più varianti fonetiche
-
-    r.onstart = () => {
-      isStarting = false;
-      setMicStatus(true, 'In ascolto...');
-    };
-
-    r.onresult = (e) => {
-      let bestSpell = null;
-      let bestTranscript = '';
-
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        // Controlla tutte le alternative fonetiche del risultato
-        for (let a = 0; a < result.length; a++) {
-          const text = result[a].transcript;
-          const spell = detectSpell(text);
-          if (spell) {
-            bestSpell = spell;
-            bestTranscript = text;
-            break;
-          }
-          if (a === 0) bestTranscript = text; // salva prima alternativa per display
-        }
-        if (bestSpell) break;
-      }
-
-      const trimmed = bestTranscript.trim();
-      if (trimmed) setMicStatus(true, '"' + trimmed + '"');
-      // Check shoot command first
-      if (detectShoot(bestTranscript)) {
-        const now = Date.now();
-        if (now - lastShootTime > 600) {
-          lastShootTime = now;
-          let fired = false;
-          ['Left', 'Right'].forEach(side => {
-            if (voiceState[side] === 'burning') {
-              fireProjectile(side);
-              fired = true;
-            }
-          });
-          if (fired) {
-            showVoiceFeedback('💥 ' + trimmed);
-            addLog(`💥 "${trimmed}" — proiettile!`, 'Left');
-          }
-        }
-        return;
-      }
-
-      if (!bestSpell) return;
-
-      const now = Date.now();
-      if (now - lastFireTime < 1500) return;
-      lastFireTime = now;
-
-      const cfg = SPELL_CONFIGS[bestSpell];
-      let charged = false;
-      ['Left', 'Right'].forEach(side => {
-        if (voiceState[side] === 'idle') {
-          voiceState[side]   = 'charged';
-          currentSpell[side] = bestSpell;
-          charged = true;
-        }
-      });
-      if (charged) {
-        addLog(`${cfg.emoji} "${trimmed}" — pronto!`, 'Left');
-        showVoiceFeedback(trimmed);
-      }
-    };
-
-    r.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        permissionDenied = true;
-        isStarting = false;
-        setMicStatus(false, 'Permesso negato');
-        return;
-      }
-      // no-speech e aborted sono normali: onend riavvierà
-      if (e.error === 'no-speech' || e.error === 'aborted') return;
-      setMicStatus(false, 'Mic: ' + e.error);
-    };
-
-    r.onend = () => {
-      if (permissionDenied) return;
-      // SEMPRE crea una nuova istanza: riusare la stessa dopo onend causa crash
-      setMicStatus(false, '↺ Riavvio...');
-      isStarting = false;
-      setTimeout(() => { currentRec = makeRec(); }, 250);
-    };
-
-    try {
-      r.start();
-    } catch(ex) {
-      isStarting = false;
-      setMicStatus(false, 'Errore avvio mic');
-      setTimeout(() => { currentRec = makeRec(); }, 1000);
+  // Ampiezza verticale media per "passo" orizzontale (per distinguere zigzag da onde)
+  // Calcola l'ampiezza media degli up-down
+  let ampSum = 0, ampCount = 0;
+  let lastExtremeY = pts[0].y, lastDir2 = 0;
+  for (let i=1; i<pts.length; i++) {
+    const dy = pts[i].y - pts[i-1].y;
+    const dir = dy > 1 ? 1 : dy < -1 ? -1 : 0;
+    if (dir !== 0 && dir !== lastDir2 && lastDir2 !== 0) {
+      ampSum += Math.abs(pts[i].y - lastExtremeY);
+      ampCount++;
+      lastExtremeY = pts[i].y;
     }
-    return r;
+    if (dir !== 0) lastDir2 = dir;
   }
+  const avgAmp = ampCount > 0 ? ampSum / ampCount : 0;
 
-  currentRec = makeRec();
+  // Conteggio cambi di direzione bruschi (>80°)
+  let sharpTurns = 0;
+  for (let i=2; i<pts.length; i++) {
+    const a1 = Math.atan2(pts[i-1].y-pts[i-2].y, pts[i-1].x-pts[i-2].x);
+    const a2 = Math.atan2(pts[i].y-pts[i-1].y,   pts[i].x-pts[i-1].x);
+    let da = Math.abs(a2-a1);
+    if (da>Math.PI) da=2*Math.PI-da;
+    if (da > 1.4) sharpTurns++;
+  }
+  const sharpRate = sharpTurns / (pts.length||1);
+
+  // Distanza primo-ultimo punto (chiusura)
+  const closure = Math.hypot(pts[pts.length-1].x-pts[0].x, pts[pts.length-1].y-pts[0].y);
+  const closureRatio = closure / (diag||1);
+
+  // Angolo dominante (per linee)
+  const mainAngle = Math.atan2(pts[pts.length-1].y-pts[0].y, pts[pts.length-1].x-pts[0].x);
+  const absAngle  = Math.abs(mainAngle);
+
+  // Aspect ratio
+  const aspect = w / (h||1);
+
+  // Lunghezza totale del tratto
+  let pathLen = 0;
+  for(let i=1;i<pts.length;i++) pathLen+=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
+
+  return { w, h, cx, cy, diag, circularity, totalAngle, waveCount, avgAmp, closureRatio, mainAngle, absAngle, aspect, sharpRate, pathLen, avgDist };
 }
 
-// ── Spell visual configs ────────────────────────────────────────
-const SPELL_CONFIGS = {
-  fire: {
-    emoji: '🔥', label: 'Fuoco', count: 7,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random() * 2.0 + 0.5, r = Math.random() * 20 + 6;
-      return { x: cx + Math.cos(angle)*r*0.25, y: cy + Math.sin(angle)*r*0.25,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed - 1.4,
-        life: 1.0, decay: Math.random()*0.028+0.022, size: Math.random()*14+6, hue: Math.random()*45 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy-=0.045; p.vx*=0.97; p.life-=p.decay; p.size*=0.97; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `hsla(${60+p.hue},100%,98%,${a})`);
-      g.addColorStop(0.3, `hsla(${40+p.hue},100%,70%,${a*0.9})`);
-      g.addColorStop(0.7, `hsla(${10+p.hue},90%,50%,${a*0.6})`);
-      g.addColorStop(1,   `hsla(${p.hue},80%,30%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
+// ─── FEATURE AGGIUNTIVE (calcolate sui punti raw) ────────────────────────────
 
-  light: {
-    emoji: '✨', label: 'Luce', count: 9,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*2.5+0.5, r = Math.random()*15+4;
-      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.5,
-        life: 1.0, decay: Math.random()*0.02+0.012, size: Math.random()*13+5 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vx*=0.99; p.vy*=0.99; p.life-=p.decay; p.size*=0.98; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `rgba(255,255,255,${a})`);
-      g.addColorStop(0.3, `rgba(255,255,200,${a*0.9})`);
-      g.addColorStop(0.7, `rgba(255,230,80,${a*0.5})`);
-      g.addColorStop(1,   `rgba(255,200,0,0)`);
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
+function getExtraFeatures(pts) {
+  // sharpRate: % di punti con cambio angolo > 80°
+  let sharpTurns = 0;
+  for (let i=2; i<pts.length; i++) {
+    const a1 = Math.atan2(pts[i-1].y-pts[i-2].y, pts[i-1].x-pts[i-2].x);
+    const a2 = Math.atan2(pts[i].y-pts[i-1].y,   pts[i].x-pts[i-1].x);
+    let da = Math.abs(a2-a1);
+    if (da>Math.PI) da=2*Math.PI-da;
+    if (da > 1.4) sharpTurns++;
+  }
+  const sharpRate = sharpTurns / (pts.length||1);
 
-  dark: {
-    emoji: '🌑', label: 'Oscurità', count: 6,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*1.5+0.3, r = Math.random()*18+5;
-      return { x: cx+Math.cos(angle)*r*0.3, y: cy+Math.sin(angle)*r*0.3,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed+0.3,
-        life: 1.0, decay: Math.random()*0.02+0.014, size: Math.random()*17+9,
-        hue: Math.random()*60+260 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.025; p.vx*=0.98; p.life-=p.decay; p.size*=0.975; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `hsla(${p.hue},60%,8%,${a})`);
-      g.addColorStop(0.4, `hsla(${p.hue},85%,20%,${a*0.85})`);
-      g.addColorStop(0.75,`hsla(${p.hue},100%,35%,${a*0.5})`);
-      g.addColorStop(1,   `hsla(${p.hue},100%,20%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='source-over';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
-      ctx.globalCompositeOperation='lighter';
-      const rg = ctx.createRadialGradient(p.x,p.y,p.size*0.5,p.x,p.y,p.size*1.6);
-      rg.addColorStop(0,`hsla(${p.hue},100%,40%,0)`);
-      rg.addColorStop(0.5,`hsla(${p.hue},100%,40%,${a*0.12})`);
-      rg.addColorStop(1,`hsla(${p.hue},100%,40%,0)`);
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size*1.6,0,Math.PI*2); ctx.fillStyle=rg; ctx.fill();
-      ctx.restore();
-    },
-  },
+  // waveCount: inversioni verticali nette (threshold 2px)
+  let waveCount = 0, lastDir = 0;
+  for (let i=1; i<pts.length; i++) {
+    const dy = pts[i].y - pts[i-1].y;
+    const dir = dy > 2 ? 1 : dy < -2 ? -1 : 0;
+    if (dir !== 0 && dir !== lastDir && lastDir !== 0) waveCount++;
+    if (dir !== 0) lastDir = dir;
+  }
 
-  magic: {
-    emoji: '🌈', label: 'Magia', count: 10,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*2.2+0.5, r = Math.random()*16+5;
-      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.8,
-        life: 1.0, decay: Math.random()*0.025+0.016, size: Math.random()*14+6,
-        hue: Math.random()*360, shift: Math.random()*4+2 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy-=0.02; p.vx*=0.98; p.life-=p.decay; p.size*=0.975; p.hue=(p.hue+p.shift)%360; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `rgba(255,255,255,${a})`);
-      g.addColorStop(0.2, `hsla(${p.hue},100%,90%,${a*0.9})`);
-      g.addColorStop(0.6, `hsla(${(p.hue+80)%360},100%,60%,${a*0.6})`);
-      g.addColorStop(1,   `hsla(${(p.hue+160)%360},100%,50%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
+  // hRevCount: inversioni orizzontali (il tratto torna indietro)
+  let hRevCount = 0, lastHDir = 0;
+  for (let i=1; i<pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x;
+    const dir = dx > 2 ? 1 : dx < -2 ? -1 : 0;
+    if (dir !== 0 && dir !== lastHDir && lastHDir !== 0) hRevCount++;
+    if (dir !== 0) lastHDir = dir;
+  }
 
-  death: {
-    emoji: '💀', label: 'Morte', count: 7,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*1.8+0.4, r = Math.random()*18+6;
-      return { x: cx+Math.cos(angle)*r*0.25, y: cy+Math.sin(angle)*r*0.25,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed+0.5,
-        life: 1.0, decay: Math.random()*0.022+0.015, size: Math.random()*16+8,
-        redness: Math.random() };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.vx*=0.975; p.life-=p.decay; p.size*=0.975; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,    `hsla(0,80%,4%,${a})`);
-      g.addColorStop(0.35, `hsla(0,90%,8%,${a*0.88})`);
-      g.addColorStop(0.7,  `hsla(${p.redness*15},100%,${12+p.redness*22}%,${a*0.65})`);
-      g.addColorStop(1,    `hsla(0,80%,18%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='source-over';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
-      if (p.redness > 0.45) {
-        ctx.globalCompositeOperation='lighter';
-        const rg = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size*1.4);
-        rg.addColorStop(0,`rgba(0,0,0,0)`);
-        rg.addColorStop(0.7,`rgba(160,0,0,${a*0.09})`);
-        rg.addColorStop(1,`rgba(0,0,0,0)`);
-        ctx.beginPath(); ctx.arc(p.x,p.y,p.size*1.4,0,Math.PI*2); ctx.fillStyle=rg; ctx.fill();
+  return { sharpRate, waveCount, hRevCount };
+}
+
+function showDebug() {}
+
+// ─── RICONOSCIMENTO ────────────────────────────────────────────────────────────
+
+function recognizeElement(pts) {
+  if (pts.length < 10) return null;
+  const s = getStats(pts);
+  const ex = getExtraFeatures(pts);
+  if (!s) return null;
+
+  const abs = Math.abs(s.totalAngle);
+  const scores = {};
+
+  // ── OMBRA ∞ ──
+  // Caratteristica UNICA: pathLen molto > diag + inversioni orizzontali (il tratto torna su se stesso)
+  // L'infinito fa: →curve→ poi ←curve← → il tratto è >2× la diagonale e inverte direzione x
+  if (abs > 7 && s.pathLen > s.diag * 1.8 && ex.hRevCount >= 1) {
+    scores.OMBRA = 30 + abs + ex.hRevCount * 3;
+  }
+
+  // ── GHIACCIO □ ──
+  // Tratto CHIUSO + angoli NETTI (sharpRate > 0.008) + totalAngle < 6 (non è un cerchio completo)
+  if (s.closureRatio < 0.28 && s.aspect > 0.4 && s.aspect < 2.5 && ex.sharpRate > 0.008 && abs < 6.5) {
+    scores.GHIACCIO = 25 + (0.28 - s.closureRatio) * 40 + ex.sharpRate * 500 - Math.abs(s.aspect - 1) * 2;
+  }
+
+  // ── LUCE ✕ (X — uno o due tratti diagonali che si incrociano) ──
+  // Supporta sia 2 tratti separati sia 1 tratto continuo a V/X
+  {
+    const angleOf = (stroke) => {
+      const s = stroke[0], e = stroke[stroke.length-1];
+      return Math.atan2(e.y - s.y, e.x - s.x);
+    };
+
+    // ── Caso 1: 2 tratti separati ──
+    if (allStrokes.length === 2) {
+      const a1 = angleOf(allStrokes[0]);
+      const a2 = angleOf(allStrokes[1]);
+      let diff = Math.abs(a1 - a2);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      const deg1 = Math.abs(a1) * 180 / Math.PI;
+      const deg2 = Math.abs(a2) * 180 / Math.PI;
+      const diag1 = (deg1 > 15 && deg1 < 165);
+      const diag2 = (deg2 > 15 && deg2 < 165);
+      const diffDeg = diff * 180 / Math.PI;
+      ex.xDiff = diffDeg;
+      // Tolleranza ampliata: 45°–135°
+      if (diffDeg > 45 && diffDeg < 135 && diag1 && diag2) {
+        scores.LUCE = 35 + (90 - Math.abs(diffDeg - 90)) * 0.5;
       }
-      ctx.restore();
-    },
-  },
+    }
 
-  green: {
-    emoji: '🌿', label: 'Natura', count: 8,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*2.0+0.4, r = Math.random()*18+5;
-      return { x: cx+Math.cos(angle)*r*0.25, y: cy+Math.sin(angle)*r*0.25,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-1.0,
-        life: 1.0, decay: Math.random()*0.022+0.015, size: Math.random()*14+6,
-        hue: Math.random()*40+100, t: Math.random()*Math.PI*2 };
-    },
-    update: p => {
-      p.t += 0.08; p.vx += Math.sin(p.t)*0.025;
-      p.x+=p.vx; p.y+=p.vy; p.vy-=0.025; p.vx*=0.98; p.life-=p.decay; p.size*=0.975;
-    },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `hsla(${p.hue},80%,92%,${a})`);
-      g.addColorStop(0.3, `hsla(${p.hue},90%,60%,${a*0.9})`);
-      g.addColorStop(0.7, `hsla(${p.hue-10},80%,35%,${a*0.6})`);
-      g.addColorStop(1,   `hsla(${p.hue-20},70%,18%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
+    // ── Caso 2: tratto continuo a X (cambio brusco di direzione nel mezzo) ──
+    // Individua il punto di svolta principale e verifica che le due metà
+    // abbiano direzioni quasi perpendicolari e che il punto di svolta
+    // sia vicino al centro del bounding box (croce/X, non V)
+    if (allStrokes.length === 1 && pts.length >= 16) {
+      const half = Math.floor(pts.length / 2);
+      // Trova l'angolo brusco massimo nella metà centrale del tratto
+      let bestTurnIdx = -1, bestTurnAngle = 0;
+      const margin = Math.floor(pts.length * 0.2);
+      for (let i = margin; i < pts.length - margin; i++) {
+        const a1 = Math.atan2(pts[i].y - pts[i-1].y, pts[i].x - pts[i-1].x);
+        const a2 = Math.atan2(pts[Math.min(i+1,pts.length-1)].y - pts[i].y,
+                              pts[Math.min(i+1,pts.length-1)].x - pts[i].x);
+        let da = Math.abs(a2 - a1);
+        if (da > Math.PI) da = 2 * Math.PI - da;
+        if (da > bestTurnAngle) { bestTurnAngle = da; bestTurnIdx = i; }
+      }
+      if (bestTurnIdx > 0 && bestTurnAngle > 0.8) {
+        const seg1 = pts.slice(0, bestTurnIdx);
+        const seg2 = pts.slice(bestTurnIdx);
+        const a1 = angleOf(seg1);
+        const a2 = angleOf(seg2);
+        let diff = Math.abs(a1 - a2);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        const diffDeg = diff * 180 / Math.PI;
+        const deg1 = Math.abs(a1) * 180 / Math.PI;
+        const deg2 = Math.abs(a2) * 180 / Math.PI;
+        const diag1 = (deg1 > 15 && deg1 < 165);
+        const diag2 = (deg2 > 15 && deg2 < 165);
+        ex.xDiff = diffDeg;
+        ex.xDiff1Stroke = true;
+        if (diffDeg > 45 && diffDeg < 135 && diag1 && diag2) {
+          scores.LUCE = 30 + (90 - Math.abs(diffDeg - 90)) * 0.4;
+        }
+      }
+    }
 
-  thunder: {
-    emoji: '⚡', label: 'Fulmine', count: 11,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*3.5+1.0, r = Math.random()*12+3;
-      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.5,
-        life: 1.0, decay: Math.random()*0.07+0.04, size: Math.random()*10+4,
-        spark: Math.random()>0.5 };
-    },
-    update: p => {
-      p.vx+=(Math.random()-0.5)*1.0; p.vy+=(Math.random()-0.5)*1.0;
-      p.x+=p.vx; p.y+=p.vy; p.vx*=0.9; p.vy*=0.9; p.life-=p.decay; p.size*=0.92;
-    },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      if (p.spark) {
-        g.addColorStop(0,`rgba(255,255,255,${a})`);
-        g.addColorStop(0.4,`rgba(200,220,255,${a*0.9})`);
-        g.addColorStop(1,`rgba(100,160,255,0)`);
+    if (ex.xDiff === undefined) ex.xDiff = -1;
+  }
+
+  // ── ERBA ⌇ ──
+  // Caratteristica: orizzontale + inversioni verticali + angoli NETTI (sharpRate alto)
+  // Si distingue da ARIA: sharpRate più alto
+  // Si distingue da LUCE: è orizzontale (aspect > 1.3) e waveCount alto
+  if (s.aspect > 1.3 && ex.waveCount >= 2 && ex.sharpRate > 0.012) {
+    scores.ERBA = 18 + ex.waveCount * 2 + ex.sharpRate * 300;
+  }
+
+  // ── ARIA 〜 ──
+  // Caratteristica: orizzontale + inversioni verticali + angoli MORBIDI (sharpRate basso)
+  if (s.aspect > 1.4 && ex.waveCount >= 3 && ex.sharpRate < 0.016) {
+    scores.ARIA = 18 + ex.waveCount * 2 + (0.016 - ex.sharpRate) * 1000;
+  }
+
+  // ── FUOCO 🔥 ──
+  // Caratteristica UNICA: bounding box PIÙ ALTA che larga (aspect < 0.75)
+  // Nessun altro simbolo è verticale
+  if (s.aspect < 0.75 && s.closureRatio > 0.1 && abs > 1.5) {
+    scores.FUOCO = 22 + (0.75 - s.aspect) * 20 + abs;
+  }
+
+  showDebug(s, ex, scores);
+
+  if (!Object.keys(scores).length) return null;
+  return Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+function recognizeMode(pts) {
+  if (pts.length < 5) return null;
+  const s = getStats(pts);
+  const ex = getExtraFeatures(pts);
+  if (!s) return null;
+
+  const abs = Math.abs(s.totalAngle);
+  const straight = s.diag / (s.pathLen||1);
+
+  // Mostra le stats nel debug anche per il modo
+  showDebug(s, ex, { 'straight×10': straight*10, 'circularity×10': s.circularity*10, '|totAngle|': abs });
+
+  // ── SFERA ○ ──
+  // Cerchio: fluido (sharpRate basso), chiuso, totalAngle alto (≈2π)
+  if (s.circularity < 0.40 && s.closureRatio < 0.50 && abs > 3.5 && ex.sharpRate < 0.008) {
+    return 'SFERA';
+  }
+
+  // ── Linee rette ──
+  if (straight > 0.48) {
+    const deg = Math.abs(s.mainAngle) * 180 / Math.PI;
+    if (deg < 28 || deg > 152)  return 'ORIZZONTALE';
+    if (deg > 62 && deg < 118)  return 'VERTICALE';
+    return 'DIAGONALE';
+  }
+
+  // Fallback curvo → SFERA
+  if (s.closureRatio < 0.55 && abs > 2.5) return 'SFERA';
+
+  const deg = Math.abs(s.mainAngle) * 180 / Math.PI;
+  if (deg < 28 || deg > 152) return 'ORIZZONTALE';
+  if (deg > 62 && deg < 118) return 'VERTICALE';
+  return 'DIAGONALE';
+}
+
+// Combo che non possono ricevere altri elementi (complete e non espandibili)
+const LOCKED_COMBOS = ['ACQUA', 'FUMOGENA', 'FULMINE', 'LAVA'];
+
+function isComboLocked() {
+  const combo = matchCombo(comboChain);
+  return combo && LOCKED_COMBOS.includes(combo.name);
+}
+
+// Controlla se aggiungere `el` alla catena attuale può ancora portare a una combo valida
+function isElementCompatible(el) {
+  const tentative = [...comboChain, el].sort().join(',');
+  return COMBOS.some(c => c._key.startsWith(tentative) || c._key === tentative);
+}
+
+// Effetto "rifiuto": il tratto diventa rosso e svanisce
+function flashRejected() {
+  applyStrokeStyle('rgba(255,60,60,0.9)');
+  setTimeout(() => {
+    dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+    allPoints = []; allStrokes = [];
+    // Ripristina il colore dell'ultimo elemento valido
+    if (detectedElement) applyStrokeStyle(ELEMENTS[detectedElement].color);
+    else applyStrokeStyle('rgba(255,255,255,0.92)');
+  }, 350);
+}
+
+// ─── Riconoscimento principale ────────────────────────────────────────────────
+function updateBadge() {
+  if (comboChain.length === 0) { badgeEl.classList.remove('visible'); return; }
+  const last = ELEMENTS[comboChain[comboChain.length-1]];
+  iconEl.textContent  = last.icon;
+  nameEl.textContent  = last.name;
+  nameEl.style.color  = last.color;
+  badgeEl.style.borderColor = last.color+'55';
+  // mostra la catena precedente come icone
+  if (comboChain.length > 1) {
+    comboChainEl.textContent = comboChain.slice(0,-1).map(e=>ELEMENTS[e].icon).join(' ') + ' +';
+  } else {
+    comboChainEl.textContent = '';
+  }
+  badgeEl.classList.add('visible');
+}
+
+function recognizeShape() {
+  if (!allPoints.length) return;
+
+  if (appState === 'WAITING_ELEMENT') {
+    // Prima prova a vedere se è un elemento
+    const el = recognizeElement(allPoints);
+    if (el && ELEMENTS[el]) {
+      comboChain.push(el);
+      detectedElement = el;
+      appState = 'WAITING_MODE_OR_ELEMENT';
+      applyStrokeStyle(ELEMENTS[el].color);
+      updateBadge();
+      // Controlla se la combo attuale è già bloccata o espandibile
+      if (isComboLocked()) {
+        setStatus('Casta la magia  ○ |  /  —', false);
       } else {
-        g.addColorStop(0,`rgba(255,255,180,${a})`);
-        g.addColorStop(0.4,`rgba(255,220,30,${a*0.9})`);
-        g.addColorStop(0.7,`rgba(200,140,0,${a*0.5})`);
-        g.addColorStop(1,`rgba(100,80,0,0)`);
+        setStatus('Aggiungi un altro elemento o casta  ○ |  /  —', false);
       }
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
-
-  earth: {
-    emoji: '🪨', label: 'Terra', count: 6,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*1.4+0.3, r = Math.random()*20+8;
-      return { x: cx+Math.cos(angle)*r*0.3, y: cy+Math.sin(angle)*r*0.3,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
-        life: 1.0, decay: Math.random()*0.016+0.01, size: Math.random()*20+11,
-        hue: Math.random()*30+18, sat: Math.random()*30+30 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.09; p.vx*=0.97; p.life-=p.decay; p.size*=0.98; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `hsla(${p.hue+10},${p.sat+20}%,68%,${a})`);
-      g.addColorStop(0.4, `hsla(${p.hue},${p.sat}%,42%,${a*0.9})`);
-      g.addColorStop(0.7, `hsla(${p.hue-8},${p.sat-10}%,22%,${a*0.7})`);
-      g.addColorStop(1,   `hsla(${p.hue},20%,10%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='source-over';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
-
-  air: {
-    emoji: '💨', label: 'Aria', count: 10,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*3.2+1.0, r = Math.random()*14+4;
-      return { x: cx+Math.cos(angle)*r*0.2, y: cy+Math.sin(angle)*r*0.2,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-1.2,
-        life: 1.0, decay: Math.random()*0.03+0.018, size: Math.random()*17+6 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy-=0.065; p.vx*=0.97; p.vy*=0.97; p.life-=p.decay; p.size*=0.98; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life) * 0.65;
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `rgba(255,255,255,${a})`);
-      g.addColorStop(0.3, `rgba(210,235,255,${a*0.7})`);
-      g.addColorStop(0.7, `rgba(160,210,255,${a*0.35})`);
-      g.addColorStop(1,   `rgba(120,190,255,0)`);
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
-
-  water: {
-    emoji: '💧', label: 'Acqua', count: 8,
-    spawn: (cx, cy, angle) => {
-      const speed = Math.random()*2.0+0.5, r = Math.random()*16+5;
-      return { x: cx+Math.cos(angle)*r*0.25, y: cy+Math.sin(angle)*r*0.25,
-        vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-0.3,
-        life: 1.0, decay: Math.random()*0.022+0.015, size: Math.random()*14+7,
-        hue: Math.random()*40+190 };
-    },
-    update: p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.04; p.vx*=0.98; p.life-=p.decay; p.size*=0.975; },
-    draw: (ctx, p) => {
-      const a = Math.max(0, p.life);
-      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size);
-      g.addColorStop(0,   `hsla(${p.hue},70%,95%,${a})`);
-      g.addColorStop(0.3, `hsla(${p.hue},90%,68%,${a*0.9})`);
-      g.addColorStop(0.7, `hsla(${p.hue-10},80%,42%,${a*0.6})`);
-      g.addColorStop(1,   `hsla(${p.hue-20},70%,22%,0)`);
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=g; ctx.fill(); ctx.restore();
-    },
-  },
-};
-
-// ── Projectile system ──────────────────────────────────────────
-const SHOOT_KEYWORDS = ['shoot','spara','sparare','via','go','lancia','sparo','fuoco via'];
-
-function detectShoot(t) {
-  const norm = normalizeStr(t);
-  return SHOOT_KEYWORDS.some(w => norm.includes(normalizeStr(w)));
-}
-
-// Spell-specific colour getter for the orb core glow
-const SPELL_COLORS = {
-  fire:    [255, 120, 20],
-  light:   [255, 255, 160],
-  dark:    [120, 40, 200],
-  magic:   [200, 80, 255],
-  death:   [80,  0,  0],
-  green:   [60,  200, 60],
-  thunder: [180, 220, 255],
-  earth:   [160, 100, 40],
-  air:     [180, 230, 255],
-  water:   [40,  140, 255],
-};
-
-class Projectile {
-  constructor(x, y, spellType) {
-    this.ox = x; this.oy = y;   // origin (palm) — orb stays here while charging
-    this.x  = x; this.y  = y;
-    this.type = spellType;
-
-    // Phase 1: GROW on hand  (frames 0–40)
-    // Phase 2: LAUNCH toward screen centre (frames 40–70)
-    // Phase 3: EXPLODE (frames 70+)
-    this.frame     = 0;
-    this.phase     = 'grow';   // grow | launch | explode
-    this.radius    = 0;
-    this.maxRadius = 55;       // max orb size before launch
-
-    // Launch target = screen centre (most dramatic impact point)
-    this.tx = 0; this.ty = 0; // set at launch time
-    this.vx = 0; this.vy = 0;
-
-    // Explosion
-    this.explosionParticles = [];
-    this.shockwaveRadius = 0;
-    this.shockwaveAlpha  = 0;
-    this.flashAlpha      = 0;
-
-    // Spinning hue for orb surface
-    this.hueShift = 0;
-  }
-
-  update() {
-    this.frame++;
-    this.hueShift = (this.hueShift + 3) % 360;
-    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
-
-    if (this.phase === 'grow') {
-      // Orb grows on the palm — 18 frames (~0.6s at 30fps)
-      const GROW_FRAMES = 18;
-      const t = Math.min(this.frame / GROW_FRAMES, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      this.radius = ease * this.maxRadius;
-      // Stay locked to the hand
-      this.x = this.ox;
-      this.y = this.oy;
-      // Orbit particles
-      if (this.frame % 2 === 0) {
-        const angle = Math.random() * Math.PI * 2;
-        const p = cfg.spawn(this.x, this.y, angle);
-        p.vx *= 0.3; p.vy *= 0.3;
-        p.size *= 1.4;
-        p.decay *= 0.5;
-        this.explosionParticles.push(p);
-      }
-      if (this.frame >= GROW_FRAMES) {
-        // Transition to launch — set velocity NOW, not on next frame
-        this.phase = 'launch';
-        this.tx = canvas.width  / 2;
-        this.ty = canvas.height / 2;
-        const dx = this.tx - this.x, dy = this.ty - this.y;
-        const len = Math.hypot(dx, dy) || 1;
-        this.vx = (dx / len) * 26;
-        this.vy = (dy / len) * 26;
-      }
-
-    } else if (this.phase === 'launch') {
-      this.x += this.vx;
-      this.y += this.vy;
-      this.radius = Math.min(this.radius + 2, this.maxRadius * 1.4);
-
-      const dist = Math.hypot(this.x - this.tx, this.y - this.ty);
-      if (dist < 28) this._explode(cfg);
-
-    } else if (this.phase === 'explode') {
-      this.explosionParticles = this.explosionParticles.filter(p => p.life > 0);
-      this.explosionParticles.forEach(p => cfg.update(p));
-      this.shockwaveRadius += 20;
-      this.shockwaveAlpha   = Math.max(0, this.shockwaveAlpha - 0.038);
-      this.flashAlpha       = Math.max(0, this.flashAlpha - 0.055);
-    }
-  }
-
-  _explode(cfg) {
-    this.phase = 'explode';
-    this.shockwaveRadius = this.radius;
-    this.shockwaveAlpha  = 1.0;
-    this.flashAlpha      = 1.0;
-
-    // Clear orbit particles, blast outward
-    this.explosionParticles = [];
-    const count = (cfg.count || 8) * 8;
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-      const p = cfg.spawn(this.x, this.y, angle);
-      p.vx *= 3.5 + Math.random() * 2;
-      p.vy *= 3.5 + Math.random() * 2;
-      p.size  *= 2.2;
-      p.decay *= 0.45;
-      this.explosionParticles.push(p);
-    }
-  }
-
-  isDead() {
-    return this.phase === 'explode' &&
-           this.explosionParticles.length === 0 &&
-           this.shockwaveAlpha <= 0 &&
-           this.flashAlpha <= 0;
-  }
-
-  draw(ctx) {
-    const col = SPELL_COLORS[this.type] || [255, 160, 40];
-    const [r, g, b] = col;
-    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
-
-    if (this.phase === 'explode') {
-      // Full-screen flash
-      if (this.flashAlpha > 0) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = `rgba(${r},${g},${b},${this.flashAlpha * 0.35})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
-      }
-      // Shockwave ring
-      if (this.shockwaveAlpha > 0) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = `rgba(${r},${g},${b},${this.shockwaveAlpha})`;
-        ctx.lineWidth   = 6;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.shockwaveRadius, 0, Math.PI * 2);
-        ctx.stroke();
-        // Second ring slightly smaller
-        ctx.globalAlpha = this.shockwaveAlpha * 0.4;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.shockwaveRadius * 0.7, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      // Explosion particles
-      this.explosionParticles.forEach(p => cfg.draw(ctx, p));
+      setTimeout(() => {
+        dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+        allPoints = []; allStrokes = [];
+      }, 350);
+      hasDrawn = false;
       return;
     }
+    // Non è un elemento: simbolo non riconosciuto
+    setStatus('Simbolo non riconosciuto — riprova', true);
+    setTimeout(() => setStatus('Disegna il simbolo di un elemento', false), 2200);
+    allPoints = []; allStrokes = [];
+    hasDrawn = false;
 
-    // Orbit particles (grow + launch phases)
-    this.explosionParticles.forEach(p => cfg.draw(ctx, p));
-
-    // Outer glow halo
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const halo = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2.2);
-    halo.addColorStop(0,   `rgba(${r},${g},${b},0.25)`);
-    halo.addColorStop(0.5, `rgba(${r},${g},${b},0.08)`);
-    halo.addColorStop(1,   `rgba(${r},${g},${b},0)`);
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius * 2.2, 0, Math.PI * 2);
-    ctx.fillStyle = halo;
-    ctx.fill();
-
-    // Orb core
-    const core = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-    core.addColorStop(0,   `rgba(255,255,255,0.95)`);
-    core.addColorStop(0.25,`rgba(${r},${g},${b},0.9)`);
-    core.addColorStop(0.7, `rgba(${Math.max(0,r-40)},${Math.max(0,g-40)},${Math.max(0,b-40)},0.6)`);
-    core.addColorStop(1,   `rgba(0,0,0,0)`);
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fillStyle = core;
-    ctx.fill();
-
-    // Pulsing ring on surface
-    const pulse = 0.5 + 0.5 * Math.sin(this.frame * 0.25);
-    ctx.strokeStyle = `rgba(255,255,255,${pulse * 0.6})`;
-    ctx.lineWidth   = 2;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius * 0.75, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-const projectiles = [];
-
-function fireProjectile(side) {
-  const spell = currentSpell[side];
-  const px = palmPos[side].x;
-  const py = palmPos[side].y;
-  projectiles.push(new Projectile(px, py, spell));
-}
-
-// Keep palm origin updated while orb is growing
-function updateProjectileOrigins() {
-  projectiles.forEach(proj => {
-    if (proj.phase === 'grow') {
-      // Find which side spawned this — match by proximity to current palm
-      ['Left','Right'].forEach(side => {
-        const d = Math.hypot(proj.ox - palmPos[side].x, proj.oy - palmPos[side].y);
-        if (d < 80) { // within 80px → still the same hand
-          proj.ox = palmPos[side].x;
-          proj.oy = palmPos[side].y;
+  } else if (appState === 'WAITING_MODE_OR_ELEMENT') {
+    // Se la combo è bloccata accetta solo il modo di cast
+    if (!isComboLocked()) {
+      const el = recognizeElement(allPoints);
+      if (el && ELEMENTS[el]) {
+        // Controlla se questo elemento è compatibile con le combo possibili
+        if (!isElementCompatible(el)) {
+          flashRejected();
+          setStatus('Elemento incompatibile — spento', true);
+          setTimeout(() => setStatus('Aggiungi altro o casta  ○ |  /  —', false), 1800);
+          hasDrawn = false;
+          return;
         }
-      });
-    }
-  });
-}
-
-let lastShootTime = 0;
-
-// ── SpellSystem (replaces FireballSystem) ───────────────────────
-class SpellSystem {
-  constructor() { this.particles = []; this.active = false; this.type = 'fire'; }
-
-  setType(type) {
-    if (this.type !== type) { this.particles = []; }
-    this.type = type;
-  }
-
-  spawn(cx, cy) {
-    this.active = true;
-    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
-    for (let i = 0; i < cfg.count; i++) {
-      this.particles.push(cfg.spawn(cx, cy, Math.random() * Math.PI * 2));
-    }
-  }
-
-  update() {
-    this.particles = this.particles.filter(p => p.life > 0);
-    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
-    this.particles.forEach(p => cfg.update(p));
-  }
-
-  draw(ctx) {
-    const cfg = SPELL_CONFIGS[this.type] || SPELL_CONFIGS.fire;
-    this.particles.forEach(p => cfg.draw(ctx, p));
-  }
-
-  deactivate() { this.active = false; }
-  kill()       { this.active = false; this.particles = []; }
-}
-
-const spells = {
-  Left:  new SpellSystem(),
-  Right: new SpellSystem(),
-};
-
-function onResults(results) {
-  canvas.width  = video.videoWidth  || 640;
-  canvas.height = video.videoHeight || 480;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  ['Left', 'Right'].forEach(side => {
-    spells[side].update();
-    spells[side].draw(ctx);
-  });
-
-  // Update & draw magic pen trail particles
-  updatePenParticles(ctx);
-
-  // Snap growing orbs to the hand
-  updateProjectileOrigins();
-  // Update & draw projectiles
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    projectiles[i].update();
-    projectiles[i].draw(ctx);
-    if (projectiles[i].isDead()) projectiles.splice(i, 1);
-  }
-
-  const activeSides = new Set();
-
-  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-    statusDot.classList.add('active');
-    const n = results.multiHandLandmarks.length;
-    statusText.textContent = `${n} ${n === 1 ? 'mano rilevata' : 'mani rilevate'}`;
-
-    results.multiHandLandmarks.forEach((lm, idx) => {
-      const modelLabel = results.multiHandedness?.[idx]?.label || 'Right';
-      const userSide   = modelLabel === 'Left' ? 'Right' : 'Left';
-      const col        = COLORS[userSide];
-
-      drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: col.connector, lineWidth: 2 });
-      drawLandmarks(ctx, lm, { color: col.landmark, fillColor: col.fill, lineWidth: 1, radius: 4 });
-
-      const side = updatePanel(lm, modelLabel);
-      activeSides.add(side);
-
-      const fingersUp = FINGER_TIPS.map((_, i) => isFingerUp(lm, i));
-      const isOpen    = fingersUp.filter(Boolean).length === 5;
-      const palmCx    = ((lm[0].x + lm[9].x) / 2) * canvas.width;
-      const palmCy    = ((lm[0].y + lm[9].y) / 2) * canvas.height;
-      const vs        = voiceState[userSide];
-
-      // Track palm & index positions every frame
-      palmPos[userSide]  = { x: palmCx, y: palmCy };
-      indexPos[userSide] = { x: lm[8].x * canvas.width, y: lm[8].y * canvas.height };
-
-      // Only index finger up = magic pen mode
-      const onlyIndex = !fingersUp[0] && fingersUp[1] && !fingersUp[2] && !fingersUp[3] && !fingersUp[4];
-      const fingertipX = lm[8].x * canvas.width;
-      const fingertipY = lm[8].y * canvas.height;
-
-      // Magic pen mode: only index up, spell must be charged or burning
-      const penActive = onlyIndex && (voiceState[userSide] === 'charged' || voiceState[userSide] === 'burning');
-
-      if (penActive) {
-        // Transition charged → burning when entering pen mode
-        if (voiceState[userSide] === 'charged') {
-          voiceState[userSide] = 'burning';
-          spells[userSide].setType(currentSpell[userSide]);
-        }
-        // Magic pen: emit trail particles at fingertip
-        const spellType = currentSpell[userSide];
-        const cfg = SPELL_CONFIGS[spellType] || SPELL_CONFIGS.fire;
-        for (let _i = 0; _i < 4; _i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const p = cfg.spawn(fingertipX, fingertipY, angle);
-          p.vx *= 0.12;
-          p.vy *= 0.12;
-          p.size *= 0.85;
-          p.decay *= 0.28; // ~2s lifetime
-          p._type = spellType;
-          penParticles[userSide].push(p);
-        }
-        // Tiny tip glow using spell particles (fast, vivid)
-        for (let _i = 0; _i < 2; _i++) {
-          const p = cfg.spawn(fingertipX, fingertipY, Math.random() * Math.PI * 2);
-          p.vx *= 0.5; p.vy *= 0.5; p.size *= 1.1;
-          spells[userSide].particles.push(p);
-        }
-      } else {
-        clearPenTrail(userSide);
-        if (isOpen) {
-          // Open hand: activate orb on palm
-          if (vs === 'charged') {
-            voiceState[userSide] = 'burning';
-            spells[userSide].setType(currentSpell[userSide]);
-          }
-          if (voiceState[userSide] === 'burning') spells[userSide].spawn(palmCx, palmCy);
+        comboChain.push(el);
+        detectedElement = el;
+        applyStrokeStyle(ELEMENTS[el].color);
+        updateBadge();
+        // Controlla se ora è bloccata
+        if (isComboLocked()) {
+          setStatus('Casta la magia  ○ |  /  —', false);
         } else {
-          // Hand closed (and not in pen mode): stop effect
-          if (vs === 'burning') {
-            voiceState[userSide] = 'idle';
-            spells[userSide].deactivate();
+          setStatus('Aggiungi altro o casta  ○ |  /  —', false);
+        }
+        setTimeout(() => {
+          dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+          allPoints = []; allStrokes = [];
+        }, 350);
+        hasDrawn = false;
+        return;
+      }
+    }
+    // Prova modo (cast)
+    const mode = recognizeMode(allPoints);
+    if (mode && MODE_LABELS[mode]) {
+      const s = getStats(allPoints);
+      lastLineAngle = s ? s.mainAngle : 0;
+      appState = 'SHOWING';
+      // Determina cosa castare: combo o elemento singolo
+      const combo = matchCombo(comboChain);
+      if (combo) {
+        showComboEffect(combo, mode);
+      } else {
+        showEffect(detectedElement, mode);
+      }
+      return;
+    }
+    // Né elemento né modo
+    setStatus('Non riconosciuto — riprova', true);
+    setTimeout(() => setStatus('Aggiungi altro o casta  ○ |  /  —', false), 2200);
+    allPoints = []; allStrokes = [];
+    hasDrawn = false;
+  }
+}
+
+let lastLineAngle = 0;
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle('error', !!isError);
+}
+
+// ─── Effetti visivi ───────────────────────────────────────────────────────────
+function showEffect(element, mode) {
+  const info = ELEMENTS[element];
+  dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  badgeEl.classList.remove('visible');
+  setStatus('Tocca per ricominciare', false);
+  resultMain.textContent = info.name;
+  resultMain.style.color = info.color;
+  resultSub.textContent  = '✦ '+MODE_LABELS[mode]+' ✦';
+  resultSub.style.color  = info.color;
+  resultOverlay.classList.add('visible');
+  tapHint.className=''; void tapHint.offsetWidth; tapHint.className='show';
+  if (animId) { cancelAnimationFrame(animId); animId=null; }
+  if (mode==='SFERA') animateSfera(element, info);
+  else animateRaggio(element, mode, info);
+  const handler = (e) => {
+    e.preventDefault(); resetAll();
+    drawCanvas.removeEventListener('click', handler);
+    drawCanvas.removeEventListener('touchend', handler);
+  };
+  setTimeout(() => {
+    drawCanvas.addEventListener('click', handler);
+    drawCanvas.addEventListener('touchend', handler);
+  }, 700);
+}
+
+const rgb = (info, a) => `rgba(${info.glow[0]},${info.glow[1]},${info.glow[2]},${a})`;
+
+function animateSfera(element, info) {
+  const W=effectCanvas.width, H=effectCanvas.height, cx=W/2, cy=H/2;
+  let t=0;
+  const particles = Array.from({length:110}, ()=>({
+    angle:Math.random()*Math.PI*2, tilt:Math.random()*Math.PI*2,
+    speed:0.007+Math.random()*0.018, r:88+Math.random()*55,
+    sz:1.2+Math.random()*3.2, alpha:0.35+Math.random()*0.55, phase:Math.random()*Math.PI*2,
+  }));
+  function frame() {
+    ectx.clearRect(0,0,W,H); t++;
+    const gR=165+Math.sin(t*0.035)*22;
+    const g=ectx.createRadialGradient(cx,cy,0,cx,cy,gR);
+    g.addColorStop(0,rgb(info,0.38)); g.addColorStop(0.5,rgb(info,0.13)); g.addColorStop(1,rgb(info,0));
+    ectx.fillStyle=g; ectx.beginPath(); ectx.arc(cx,cy,gR,0,Math.PI*2); ectx.fill();
+    const s=ectx.createRadialGradient(cx-20,cy-20,4,cx,cy,74);
+    s.addColorStop(0,'rgba(255,255,255,0.96)'); s.addColorStop(0.18,rgb(info,0.92));
+    s.addColorStop(0.65,rgb(info,0.52)); s.addColorStop(1,rgb(info,0.08));
+    ectx.fillStyle=s; ectx.beginPath(); ectx.arc(cx,cy,74,0,Math.PI*2); ectx.fill();
+    if(element==='FUOCO'){
+      for(let i=0;i<7;i++){
+        const fx=cx+(Math.random()-0.5)*82,fy=cy-25-Math.random()*95;
+        const fg=ectx.createRadialGradient(fx,fy,0,fx,fy,16+Math.random()*16);
+        fg.addColorStop(0,'rgba(255,230,55,0.72)'); fg.addColorStop(1,'transparent');
+        ectx.fillStyle=fg; ectx.beginPath(); ectx.arc(fx,fy,16+Math.random()*16,0,Math.PI*2); ectx.fill();
+      }
+    } else if(element==='GHIACCIO'){
+      for(let i=0;i<6;i++){
+        const a=(i/6)*Math.PI*2+t*0.009,r=52+Math.sin(t*0.038+i)*9;
+        ectx.save(); ectx.translate(cx+Math.cos(a)*r,cy+Math.sin(a)*r);
+        ectx.rotate(a+t*0.016); ectx.fillStyle='rgba(200,240,255,0.78)';
+        ectx.beginPath(); ectx.moveTo(0,-11); ectx.lineTo(4,0); ectx.lineTo(0,11); ectx.lineTo(-4,0);
+        ectx.closePath(); ectx.fill(); ectx.restore();
+      }
+    } else if(element==='OMBRA'){
+      for(let i=0;i<9;i++){
+        const a=(i/9)*Math.PI*2+t*0.022,l=68+Math.sin(t*0.06+i*1.4)*26;
+        ectx.strokeStyle=rgb(info,0.42); ectx.lineWidth=2; ectx.beginPath();
+        ectx.moveTo(cx,cy); ectx.lineTo(cx+Math.cos(a)*l,cy+Math.sin(a)*l); ectx.stroke();
+      }
+    } else if(element==='ARIA'){
+      ectx.save(); ectx.translate(cx,cy); ectx.rotate(t*0.022);
+      for(let i=0;i<3;i++){
+        ectx.strokeStyle=rgb(info,0.28-i*0.07); ectx.lineWidth=2;
+        ectx.beginPath(); ectx.arc(0,0,56+i*22,0,Math.PI*1.75); ectx.stroke();
+      }
+      ectx.restore();
+    } else if(element==='LUCE'){
+      for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2+t*0.012,l=82+Math.sin(t*0.05+i)*22;
+        ectx.strokeStyle='rgba(255,255,180,0.22)'; ectx.lineWidth=1.5;
+        ectx.beginPath();
+        ectx.moveTo(cx+Math.cos(a)*74,cy+Math.sin(a)*74);
+        ectx.lineTo(cx+Math.cos(a)*l,cy+Math.sin(a)*l); ectx.stroke();
+      }
+    } else if(element==='ERBA'){
+      // Spighe d'erba che oscillano attorno alla sfera
+      for(let i=0;i<12;i++){
+        const a=(i/12)*Math.PI*2+t*0.008;
+        const r=68+Math.sin(t*0.05+i*0.8)*12;
+        const sway=Math.sin(t*0.04+i*1.1)*0.3;
+        ectx.save();
+        ectx.translate(cx+Math.cos(a)*r, cy+Math.sin(a)*r);
+        ectx.rotate(a+Math.PI/2+sway);
+        ectx.strokeStyle=rgb(info,0.65); ectx.lineWidth=1.5;
+        ectx.beginPath(); ectx.moveTo(0,0); ectx.lineTo(0,-16);
+        ectx.stroke();
+        // punta foglia
+        ectx.fillStyle=rgb(info,0.55);
+        ectx.beginPath(); ectx.ellipse(0,-18,3,5,0,0,Math.PI*2);
+        ectx.fill();
+        ectx.restore();
+      }
+    }
+    particles.forEach(p=>{
+      p.angle+=p.speed;
+      const ox=Math.cos(p.angle)*p.r,oy=Math.sin(p.angle)*p.r*Math.sin(p.tilt);
+      ectx.fillStyle=rgb(info,p.alpha*(0.65+Math.sin(t*0.05+p.phase)*0.35));
+      ectx.beginPath(); ectx.arc(cx+ox,cy+oy,p.sz,0,Math.PI*2); ectx.fill();
+    });
+    if(element==='LUCE'){
+      for(let i=0;i<5;i++){
+        const sx=cx+(Math.random()-0.5)*270,sy=cy+(Math.random()-0.5)*270;
+        ectx.fillStyle='rgba(255,255,210,0.88)';
+        ectx.beginPath(); ectx.arc(sx,sy,0.5+Math.random()*1.8,0,Math.PI*2); ectx.fill();
+      }
+    }
+    animId=requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+function animateRaggio(element, mode, info) {
+  const W=effectCanvas.width, H=effectCanvas.height;
+  let t=0;
+
+  // ── FIX: usa l'angolo reale della linea disegnata ──
+  // Calcola punto di partenza e fine in base all'angolo reale (lastLineAngle)
+  // partendo dal centro dello schermo, esteso fino ai bordi
+  const cx=W/2, cy=H/2;
+  const angle = lastLineAngle;
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+
+  // Estende la linea fino ai bordi del canvas nei due sensi
+  function rayToBorder(ox, oy, vx, vy) {
+    // Interseca con i 4 bordi del canvas e prende il t minimo positivo
+    const candidates = [];
+    if (vx !== 0) {
+      candidates.push((vx > 0 ? W - ox : -ox) / vx);
+    }
+    if (vy !== 0) {
+      candidates.push((vy > 0 ? H - oy : -oy) / vy);
+    }
+    const tMax = Math.min(...candidates.filter(v=>v>0));
+    return { x: ox + vx*tMax, y: oy + vy*tMax };
+  }
+
+  const p1 = rayToBorder(cx, cy, -dx, -dy);
+  const p2 = rayToBorder(cx, cy,  dx,  dy);
+  const bx1=p1.x, by1=p1.y, bx2=p2.x, by2=p2.y;
+
+  const len=Math.hypot(bx2-bx1,by2-by1);
+  const ndx=(bx2-bx1)/len, ndy=(by2-by1)/len;
+  const px=-ndy, py=ndx; // perpendicolare
+
+  function frame(){
+    ectx.clearRect(0,0,W,H); t++;
+    const pulse=0.78+Math.sin(t*0.09)*0.22;
+    [{w:90*pulse,a:0.035},{w:45*pulse,a:0.075},{w:20*pulse,a:0.17},{w:7,a:0.58*pulse},{w:2,a:0.96}].forEach(({w,a})=>{
+      ectx.save();
+      ectx.strokeStyle=w>9?rgb(info,a):`rgba(255,255,255,${a})`;
+      ectx.lineWidth=w; ectx.lineCap='butt';
+      ectx.shadowBlur=w>7?22:8; ectx.shadowColor=rgb(info,1);
+      ectx.beginPath(); ectx.moveTo(bx1,by1); ectx.lineTo(bx2,by2);
+      ectx.stroke(); ectx.restore();
+    });
+    for(let i=0;i<28;i++){
+      const pr=((t*4.5+i*(len/28))%len);
+      const bpx=bx1+ndx*pr+(Math.random()-0.5)*28,bpy=by1+ndy*pr+(Math.random()-0.5)*28;
+      ectx.fillStyle=rgb(info,0.45+Math.random()*0.5);
+      ectx.beginPath(); ectx.arc(bpx,bpy,1.2+Math.random()*3,0,Math.PI*2); ectx.fill();
+    }
+    if(element==='FUOCO'){
+      for(let i=0;i<9;i++){
+        const pr=Math.random()*len;
+        const fpx=bx1+ndx*pr+px*(Math.random()-0.5)*32,fpy=by1+ndy*pr+py*(Math.random()-0.5)*32;
+        const fg=ectx.createRadialGradient(fpx,fpy,0,fpx,fpy,13+Math.random()*14);
+        fg.addColorStop(0,'rgba(255,215,50,0.72)'); fg.addColorStop(1,'transparent');
+        ectx.fillStyle=fg; ectx.beginPath(); ectx.arc(fpx,fpy,13+Math.random()*14,0,Math.PI*2); ectx.fill();
+      }
+    } else if(element==='GHIACCIO'){
+      for(let i=0;i<7;i++){
+        const pr=Math.random()*len,ipx=bx1+ndx*pr,ipy=by1+ndy*pr;
+        ectx.save(); ectx.translate(ipx,ipy); ectx.rotate(t*0.04+i*0.9);
+        ectx.fillStyle='rgba(200,240,255,0.72)';
+        ectx.beginPath(); ectx.moveTo(0,-10); ectx.lineTo(3.5,0); ectx.lineTo(0,10); ectx.lineTo(-3.5,0);
+        ectx.closePath(); ectx.fill(); ectx.restore();
+      }
+    } else if(element==='OMBRA'){
+      for(let i=0;i<6;i++){
+        const pr=((t*2.8+i*len/6)%len),opx=bx1+ndx*pr,opy=by1+ndy*pr;
+        const wl=24+Math.sin(t*0.11+i)*11;
+        ectx.strokeStyle=rgb(info,0.55); ectx.lineWidth=1.5;
+        ectx.beginPath(); ectx.moveTo(opx+px*wl,opy+py*wl); ectx.lineTo(opx-px*wl,opy-py*wl); ectx.stroke();
+      }
+    } else if(element==='ARIA'){
+      for(let i=0;i<7;i++){
+        const pr=((t*5.5+i*len/7)%len),apx=bx1+ndx*pr,apy=by1+ndy*pr;
+        ectx.strokeStyle=rgb(info,0.38); ectx.lineWidth=1;
+        ectx.beginPath(); ectx.arc(apx,apy,9+Math.sin(t*0.13+i)*6,0,Math.PI*2); ectx.stroke();
+      }
+    } else if(element==='LUCE'){
+      for(let i=0;i<6;i++){
+        const pr=Math.random()*len;
+        const lpx=bx1+ndx*pr+(Math.random()-0.5)*22,lpy=by1+ndy*pr+(Math.random()-0.5)*22;
+        ectx.fillStyle='rgba(255,255,200,0.9)';
+        ectx.beginPath(); ectx.arc(lpx,lpy,0.4+Math.random()*2,0,Math.PI*2); ectx.fill();
+      }
+    } else if(element==='ERBA'){
+      // Fili d'erba lungo il raggio
+      for(let i=0;i<10;i++){
+        const pr=Math.random()*len;
+        const side=(Math.random()>0.5?1:-1)*(8+Math.random()*20);
+        const gpx=bx1+ndx*pr+px*side, gpy=by1+ndy*pr+py*side;
+        const sway=Math.sin(t*0.04+i*1.3)*6;
+        ectx.strokeStyle=rgb(info,0.55+Math.random()*0.35); ectx.lineWidth=1.2;
+        ectx.beginPath();
+        ectx.moveTo(gpx,gpy);
+        ectx.quadraticCurveTo(gpx+px*sway,gpy+py*sway,gpx+px*20+ndx*4,gpy+py*20+ndy*4);
+        ectx.stroke();
+      }
+    }
+    animId=requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+// ─── Effetto visivo combo ─────────────────────────────────────────────────────
+function showComboEffect(combo, mode) {
+  dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  badgeEl.classList.remove('visible');
+  setStatus('Tocca per ricominciare', false);
+  resultMain.textContent = combo.name;
+  resultMain.style.color = combo.color;
+  resultSub.textContent  = '✦ ' + MODE_LABELS[mode] + ' ✦';
+  resultSub.style.color  = combo.color;
+  resultOverlay.classList.add('visible');
+  tapHint.className=''; void tapHint.offsetWidth; tapHint.className='show';
+  if (animId) { cancelAnimationFrame(animId); animId=null; }
+  if (mode === 'SFERA') animateComboSfera(combo);
+  else animateComboRaggio(combo, mode);
+  const handler = (e) => {
+    e.preventDefault(); resetAll();
+    drawCanvas.removeEventListener('click', handler);
+    drawCanvas.removeEventListener('touchend', handler);
+  };
+  setTimeout(() => {
+    drawCanvas.addEventListener('click', handler);
+    drawCanvas.addEventListener('touchend', handler);
+  }, 700);
+}
+
+function animateComboSfera(combo) {
+  const W=effectCanvas.width, H=effectCanvas.height, cx=W/2, cy=H/2;
+  let t=0;
+  const [r,g,b2] = combo.glow;
+  const rgbC = (a) => `rgba(${r},${g},${b2},${a})`;
+  const particles = Array.from({length:130}, ()=>({
+    angle:Math.random()*Math.PI*2, tilt:Math.random()*Math.PI*2,
+    speed:0.006+Math.random()*0.02, radius:80+Math.random()*65,
+    sz:1.2+Math.random()*3.5, alpha:0.3+Math.random()*0.6, phase:Math.random()*Math.PI*2,
+  }));
+
+  function frame() {
+    ectx.clearRect(0,0,W,H); t++;
+    const gR=170+Math.sin(t*0.03)*25;
+    const grad=ectx.createRadialGradient(cx,cy,0,cx,cy,gR);
+    grad.addColorStop(0,rgbC(0.42)); grad.addColorStop(0.5,rgbC(0.14)); grad.addColorStop(1,rgbC(0));
+    ectx.fillStyle=grad; ectx.beginPath(); ectx.arc(cx,cy,gR,0,Math.PI*2); ectx.fill();
+
+    const sg=ectx.createRadialGradient(cx-20,cy-20,4,cx,cy,74);
+    sg.addColorStop(0,'rgba(255,255,255,0.96)'); sg.addColorStop(0.2,rgbC(0.9));
+    sg.addColorStop(0.65,rgbC(0.5)); sg.addColorStop(1,rgbC(0.06));
+    ectx.fillStyle=sg; ectx.beginPath(); ectx.arc(cx,cy,74,0,Math.PI*2); ectx.fill();
+
+    // Effetti specifici per combo
+    if (combo.name === 'ACQUA') {
+      // Onde concentriche
+      for(let i=0;i<4;i++){
+        const wr=(t*1.2+i*28)%140;
+        ectx.strokeStyle=rgbC(0.6*(1-wr/140)); ectx.lineWidth=2;
+        ectx.beginPath(); ectx.arc(cx,cy,wr,0,Math.PI*2); ectx.stroke();
+      }
+    } else if (combo.name === 'FUMOGENA') {
+      // Nuvole di fumo che si espandono
+      for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2+t*0.008;
+        const dist=55+Math.sin(t*0.03+i)*18;
+        const sr=22+Math.sin(t*0.05+i*1.3)*8;
+        const sg2=ectx.createRadialGradient(cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,0,cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,sr);
+        sg2.addColorStop(0,rgbC(0.38)); sg2.addColorStop(1,rgbC(0));
+        ectx.fillStyle=sg2; ectx.beginPath(); ectx.arc(cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,sr,0,Math.PI*2); ectx.fill();
+      }
+    } else if (combo.name === 'FULMINE') {
+      // Scariche elettriche
+      if(t%3===0){
+        for(let i=0;i<3;i++){
+          const a=Math.random()*Math.PI*2;
+          const l=50+Math.random()*60;
+          ectx.strokeStyle=`rgba(255,255,180,${0.5+Math.random()*0.5})`;
+          ectx.lineWidth=1+Math.random()*2;
+          ectx.beginPath(); ectx.moveTo(cx,cy);
+          let lx=cx,ly=cy;
+          for(let s=0;s<4;s++){
+            lx+=Math.cos(a+(Math.random()-0.5)*1.2)*(l/4);
+            ly+=Math.sin(a+(Math.random()-0.5)*1.2)*(l/4);
+            ectx.lineTo(lx,ly);
           }
+          ectx.stroke();
         }
       }
-    });
-  } else {
-    statusDot.classList.remove('active');
-    statusText.textContent = 'Nessuna mano rilevata';
-    spells.Left.deactivate();
-    spells.Right.deactivate();
-  }
-
-  ['Left', 'Right'].forEach(side => {
-    if (!activeSides.has(side)) {
-      resetPanel(side);
-      spells[side].deactivate();
-      clearPenTrail(side);
-      if (voiceState[side] === 'burning') voiceState[side] = 'idle';
+    } else if (combo.name === 'FANGO') {
+      // Gocce che cadono/spruzzano
+      for(let i=0;i<6;i++){
+        const a=(i/6)*Math.PI*2+t*0.01;
+        const dist=50+Math.random()*40;
+        ectx.fillStyle=rgbC(0.55);
+        ectx.beginPath(); ectx.ellipse(cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,6,9,a,0,Math.PI*2); ectx.fill();
+      }
+    } else if (combo.name === 'ROCCIA') {
+      // Frammenti angolosi che orbitano
+      for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2+t*0.007;
+        const dist=58+Math.sin(t*0.04+i)*12;
+        ectx.save(); ectx.translate(cx+Math.cos(a)*dist,cy+Math.sin(a)*dist);
+        ectx.rotate(a+t*0.01);
+        ectx.fillStyle=rgbC(0.7);
+        ectx.beginPath(); ectx.moveTo(0,-10); ectx.lineTo(8,4); ectx.lineTo(-2,10); ectx.lineTo(-8,2); ectx.closePath(); ectx.fill();
+        ectx.restore();
+      }
+    } else if (combo.name === 'LAVA') {
+      // Bolle incandescenti
+      for(let i=0;i<7;i++){
+        const fx=cx+(Math.random()-0.5)*100,fy=cy-20-Math.random()*110;
+        const fg=ectx.createRadialGradient(fx,fy,0,fx,fy,18+Math.random()*18);
+        fg.addColorStop(0,'rgba(255,200,50,0.8)'); fg.addColorStop(0.5,rgbC(0.6)); fg.addColorStop(1,'transparent');
+        ectx.fillStyle=fg; ectx.beginPath(); ectx.arc(fx,fy,18+Math.random()*18,0,Math.PI*2); ectx.fill();
+      }
     }
-  });
+
+    particles.forEach(p=>{
+      p.angle+=p.speed;
+      const ox=Math.cos(p.angle)*p.radius, oy=Math.sin(p.angle)*p.radius*Math.sin(p.tilt);
+      ectx.fillStyle=rgbC(p.alpha*(0.6+Math.sin(t*0.05+p.phase)*0.4));
+      ectx.beginPath(); ectx.arc(cx+ox,cy+oy,p.sz,0,Math.PI*2); ectx.fill();
+    });
+    animId=requestAnimationFrame(frame);
+  }
+  frame();
 }
 
-// ── Commands drawer ────────────────────────────────────────────
-(function() {
-  const toggle  = document.getElementById('menuToggle');
-  const drawer  = document.getElementById('cmdDrawer');
-  const overlay = document.getElementById('drawerOverlay');
-  const grid    = document.getElementById('spellMenuGrid');
+function animateComboRaggio(combo, mode) {
+  const W=effectCanvas.width, H=effectCanvas.height, cx=W/2, cy=H/2;
+  let t=0;
+  const [r,g,b2] = combo.glow;
+  const rgbC = (a) => `rgba(${r},${g},${b2},${a})`;
+  const angle=lastLineAngle, dx=Math.cos(angle), dy=Math.sin(angle);
 
-  // Dati incantesimi per il menu (copiati da SPELL_KEYWORDS + emoji da SPELL_CONFIGS)
-  const MENU_DATA = [
-    { key:'fire',    emoji:'🔥', name:'Fuoco',     words:['fuoco','fire'] },
-    { key:'water',   emoji:'💧', name:'Acqua',     words:['acqua','water'] },
-    { key:'earth',   emoji:'🪨', name:'Terra',     words:['terra','earth'] },
-    { key:'air',     emoji:'💨', name:'Aria',      words:['aria','air','vento'] },
-    { key:'thunder', emoji:'⚡', name:'Fulmine',   words:['fulmine','thunder','tuono'] },
-    { key:'light',   emoji:'✨', name:'Luce',      words:['luce','light'] },
-    { key:'dark',    emoji:'🌑', name:'Ombra',     words:['ombra','dark','buio'] },
-    { key:'magic',   emoji:'🔮', name:'Magia',     words:['magia','magic'] },
-    { key:'death',   emoji:'💀', name:'Morte',     words:['morte','death'] },
-    { key:'green',   emoji:'🌿', name:'Natura',    words:['natura','green','verde'] },
-  ];
-
-  grid.innerHTML = MENU_DATA.map(s => `
-    <div class="spell-card">
-      <span class="sc-emoji">${s.emoji}</span>
-      <span class="sc-name">${s.name}</span>
-      <div style="margin-top:5px">${s.words.map(w => `<span class="sc-word">${w}</span>`).join('')}</div>
-    </div>
-  `).join('');
-
-  function openDrawer()  { drawer.classList.add('open'); overlay.classList.add('open'); toggle.classList.add('open'); toggle.title = 'Chiudi'; }
-  function closeDrawer() { drawer.classList.remove('open'); overlay.classList.remove('open'); toggle.classList.remove('open'); toggle.title = 'Comandi vocali'; }
-
-  toggle.addEventListener('click', () => drawer.classList.contains('open') ? closeDrawer() : openDrawer());
-  overlay.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
-})();
-
-// ── Start camera ───────────────────────────────────────────────
-startBtn.addEventListener('click', async () => {
-  startBtn.disabled = true;
-  startBtn.textContent = 'Avvio in corso...';
-
-  const hands = new Hands({
-    locateFile: (file) =>
-      `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
-  });
-
-  hands.setOptions({
-    maxNumHands: 2,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.5,
-  });
-
-  hands.onResults(onResults);
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-    video.srcObject = stream;
-    await video.play();
-    loadingOverlay.style.display = 'none';
-    statusText.textContent = 'Modello in caricamento...';
-
-    const camera = new Camera(video, {
-      onFrame: async () => { await hands.send({ image: video }); },
-      width: 640, height: 480,
-    });
-    camera.start();
-    startBtn.textContent = '● In esecuzione';
-    initVoice();
-
-    (function animLoop() {
-      requestAnimationFrame(animLoop);
-      const anyActive = fireballs.Left.particles.length > 0 || fireballs.Right.particles.length > 0;
-      if (!anyActive) return;
-      fireballs.Left.update();
-      fireballs.Right.update();
-    })();
-  } catch (err) {
-    loadingOverlay.innerHTML = `
-      <p style="color:#ff3cac">Errore: ${err.message}</p>
-      <p style="color:var(--muted);font-size:0.7rem">Controlla i permessi della webcam</p>`;
-    startBtn.disabled = false;
-    startBtn.textContent = '▶ Riprova';
+  function rayToBorder(ox,oy,vx,vy){
+    const candidates=[];
+    if(vx!==0) candidates.push((vx>0?W-ox:-ox)/vx);
+    if(vy!==0) candidates.push((vy>0?H-oy:-oy)/vy);
+    const tMax=Math.min(...candidates.filter(v=>v>0));
+    return {x:ox+vx*tMax,y:oy+vy*tMax};
   }
-});
+  const p1=rayToBorder(cx,cy,-dx,-dy), p2=rayToBorder(cx,cy,dx,dy);
+  const bx1=p1.x,by1=p1.y,bx2=p2.x,by2=p2.y;
+  const len=Math.hypot(bx2-bx1,by2-by1);
+  const ndx=(bx2-bx1)/len, ndy=(by2-by1)/len;
+  const px=-ndy, py=ndx;
+
+  function frame(){
+    ectx.clearRect(0,0,W,H); t++;
+    const pulse=0.78+Math.sin(t*0.09)*0.22;
+    [{w:90*pulse,a:0.03},{w:45*pulse,a:0.07},{w:20*pulse,a:0.16},{w:7,a:0.55*pulse},{w:2,a:0.96}].forEach(({w,a})=>{
+      ectx.save();
+      ectx.strokeStyle=w>9?rgbC(a):`rgba(255,255,255,${a})`;
+      ectx.lineWidth=w; ectx.lineCap='butt';
+      ectx.shadowBlur=w>7?22:8; ectx.shadowColor=rgbC(1);
+      ectx.beginPath(); ectx.moveTo(bx1,by1); ectx.lineTo(bx2,by2);
+      ectx.stroke(); ectx.restore();
+    });
+    for(let i=0;i<28;i++){
+      const pr=((t*4.5+i*(len/28))%len);
+      const bpx=bx1+ndx*pr+(Math.random()-0.5)*28,bpy=by1+ndy*pr+(Math.random()-0.5)*28;
+      ectx.fillStyle=rgbC(0.45+Math.random()*0.5);
+      ectx.beginPath(); ectx.arc(bpx,bpy,1.2+Math.random()*3,0,Math.PI*2); ectx.fill();
+    }
+
+    if (combo.name === 'ACQUA') {
+      for(let i=0;i<8;i++){
+        const pr=((t*3+i*len/8)%len),wpx=bx1+ndx*pr,wpy=by1+ndy*pr;
+        ectx.strokeStyle=rgbC(0.4); ectx.lineWidth=1.5;
+        ectx.beginPath(); ectx.arc(wpx,wpy,8+Math.sin(t*0.1+i)*5,0,Math.PI*2); ectx.stroke();
+      }
+    } else if (combo.name === 'FUMOGENA') {
+      for(let i=0;i<8;i++){
+        const pr=Math.random()*len;
+        const spx=bx1+ndx*pr+px*(Math.random()-0.5)*60,spy=by1+ndy*pr+py*(Math.random()-0.5)*60;
+        const sg=ectx.createRadialGradient(spx,spy,0,spx,spy,20+Math.random()*20);
+        sg.addColorStop(0,rgbC(0.3)); sg.addColorStop(1,rgbC(0));
+        ectx.fillStyle=sg; ectx.beginPath(); ectx.arc(spx,spy,20+Math.random()*20,0,Math.PI*2); ectx.fill();
+      }
+    } else if (combo.name === 'FULMINE') {
+      if(t%2===0){
+        const pr=Math.random()*len;
+        const fpx=bx1+ndx*pr,fpy=by1+ndy*pr;
+        ectx.strokeStyle=`rgba(255,255,220,0.9)`; ectx.lineWidth=1.5;
+        ectx.beginPath(); ectx.moveTo(fpx+px*(Math.random()-0.5)*50,fpy+py*(Math.random()-0.5)*50);
+        ectx.lineTo(fpx,fpy); ectx.stroke();
+      }
+    } else if (combo.name === 'FANGO') {
+      for(let i=0;i<6;i++){
+        const pr=Math.random()*len;
+        const mpx=bx1+ndx*pr+px*(Math.random()-0.5)*28,mpy=by1+ndy*pr+py*(Math.random()-0.5)*28;
+        ectx.fillStyle=rgbC(0.6);
+        ectx.beginPath(); ectx.ellipse(mpx,mpy,5,8,Math.random()*Math.PI,0,Math.PI*2); ectx.fill();
+      }
+    } else if (combo.name === 'ROCCIA') {
+      for(let i=0;i<5;i++){
+        const pr=Math.random()*len;
+        const rpx=bx1+ndx*pr,rpy=by1+ndy*pr;
+        ectx.save(); ectx.translate(rpx,rpy); ectx.rotate(t*0.03+i);
+        ectx.fillStyle=rgbC(0.7);
+        ectx.beginPath(); ectx.moveTo(0,-9); ectx.lineTo(7,3); ectx.lineTo(-2,9); ectx.lineTo(-7,2); ectx.closePath(); ectx.fill();
+        ectx.restore();
+      }
+    } else if (combo.name === 'LAVA') {
+      for(let i=0;i<9;i++){
+        const pr=Math.random()*len;
+        const lpx=bx1+ndx*pr+px*(Math.random()-0.5)*35,lpy=by1+ndy*pr+py*(Math.random()-0.5)*35;
+        const lg=ectx.createRadialGradient(lpx,lpy,0,lpx,lpy,14+Math.random()*14);
+        lg.addColorStop(0,'rgba(255,210,50,0.8)'); lg.addColorStop(0.5,rgbC(0.55)); lg.addColorStop(1,'transparent');
+        ectx.fillStyle=lg; ectx.beginPath(); ectx.arc(lpx,lpy,14+Math.random()*14,0,Math.PI*2); ectx.fill();
+      }
+    }
+    animId=requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+
+function resetAll() {
+  if(animId){ cancelAnimationFrame(animId); animId=null; }
+  appState='WAITING_ELEMENT'; detectedElement=null; hasDrawn=false;
+  allPoints=[]; allStrokes=[]; comboChain=[];
+  dctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  ectx.clearRect(0,0,effectCanvas.width,effectCanvas.height);
+  applyStrokeStyle('rgba(255,255,255,0.92)');
+  resultOverlay.classList.remove('visible');
+  badgeEl.classList.remove('visible');
+  comboChainEl.textContent='';
+  tapHint.className='';
+  setStatus('Disegna il simbolo di un elemento', false);
+}
+clearBtn.addEventListener('click', e=>{ e.stopPropagation(); resetAll(); });
 </script>
 </body>
 </html>
