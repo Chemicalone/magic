@@ -121,7 +121,7 @@ const ELEMENTS = {
   LUCE:     { icon:'✕', color:'#FFE566', glow:[255,220,80],  name:'LUCE' },
   OMBRA:    { icon:'∞', color:'#B46EFF', glow:[150,80,230],  name:'OMBRA' },
   FUOCO:    { icon:'🔥', color:'#FF6830', glow:[255,95,40],   name:'FUOCO' },
-  GHIACCIO: { icon:'❄', color:'#7DDEFF', glow:[100,200,255], name:'GHIACCIO' },
+  GHIACCIO: { icon:'△', color:'#7DDEFF', glow:[100,200,255], name:'GHIACCIO' },
   ARIA:     { icon:'〜', color:'#6FFFBA', glow:[90,255,170],  name:'ARIA' },
   ERBA:     { icon:'🌿', color:'#5FE644', glow:[80,210,60],   name:'ERBA' },
 };
@@ -365,21 +365,37 @@ function recognizeElement(pts) {
     scores.OMBRA = 30 + abs + ex.hRevCount * 3;
   }
 
-  // ── GHIACCIO □ ──
-  // Tratto CHIUSO + angoli NETTI (sharpRate > 0.008) + totalAngle < 6 (non è un cerchio completo)
-  if (s.closureRatio < 0.28 && s.aspect > 0.4 && s.aspect < 2.5 && ex.sharpRate > 0.008 && abs < 6.5) {
-    scores.GHIACCIO = 25 + (0.28 - s.closureRatio) * 40 + ex.sharpRate * 500 - Math.abs(s.aspect - 1) * 2;
+  // ── GHIACCIO △ ──
+  // Triangolo: tratto chiuso con esattamente 2-3 angoli netti ben distanziati.
+  // Si distingue da FUOCO (verticale) e da cerchio (nessun angolo netto).
+  {
+    const minGap = Math.floor(pts.length * 0.15); // almeno 15% tra un angolo e il successivo
+    let corners = [], lastCornerIdx = -minGap - 1;
+    for (let i = 2; i < pts.length - 1; i++) {
+      const a1 = Math.atan2(pts[i-1].y - pts[i-2].y, pts[i-1].x - pts[i-2].x);
+      const a2 = Math.atan2(pts[i].y   - pts[i-1].y, pts[i].x   - pts[i-1].x);
+      let da = Math.abs(a2 - a1);
+      if (da > Math.PI) da = 2 * Math.PI - da;
+      if (da > 0.9 && i - lastCornerIdx > minGap) {
+        corners.push(i);
+        lastCornerIdx = i;
+      }
+    }
+    const cc = corners.length;
+    // Triangolo: 2 o 3 angoli netti, tratto chiuso (primo e ultimo punto vicini)
+    if (cc >= 2 && cc <= 4 && s.closureRatio < 0.45 && abs < 7.5) {
+      scores.GHIACCIO = 30 + (4 - Math.abs(cc - 3)) * 5 - s.closureRatio * 20;
+    }
   }
 
-  // ── LUCE ✕ (X — uno o due tratti diagonali che si incrociano) ──
-  // Supporta sia 2 tratti separati sia 1 tratto continuo a V/X
+  // ── LUCE ✕ (X — esattamente 2 tratti diagonali che si incrociano) ──
+  // Richiede OBBLIGATORIAMENTE 2 tratti separati: non è riconoscibile in un solo tratto
   {
     const angleOf = (stroke) => {
       const s = stroke[0], e = stroke[stroke.length-1];
       return Math.atan2(e.y - s.y, e.x - s.x);
     };
 
-    // ── Caso 1: 2 tratti separati ──
     if (allStrokes.length === 2) {
       const a1 = angleOf(allStrokes[0]);
       const a2 = angleOf(allStrokes[1]);
@@ -391,46 +407,17 @@ function recognizeElement(pts) {
       const diag2 = (deg2 > 15 && deg2 < 165);
       const diffDeg = diff * 180 / Math.PI;
       ex.xDiff = diffDeg;
-      // Tolleranza ampliata: 45°–135°
-      if (diffDeg > 45 && diffDeg < 135 && diag1 && diag2) {
-        scores.LUCE = 35 + (90 - Math.abs(diffDeg - 90)) * 0.5;
-      }
-    }
 
-    // ── Caso 2: tratto continuo a X (cambio brusco di direzione nel mezzo) ──
-    // Individua il punto di svolta principale e verifica che le due metà
-    // abbiano direzioni quasi perpendicolari e che il punto di svolta
-    // sia vicino al centro del bounding box (croce/X, non V)
-    if (allStrokes.length === 1 && pts.length >= 16) {
-      const half = Math.floor(pts.length / 2);
-      // Trova l'angolo brusco massimo nella metà centrale del tratto
-      let bestTurnIdx = -1, bestTurnAngle = 0;
-      const margin = Math.floor(pts.length * 0.2);
-      for (let i = margin; i < pts.length - margin; i++) {
-        const a1 = Math.atan2(pts[i].y - pts[i-1].y, pts[i].x - pts[i-1].x);
-        const a2 = Math.atan2(pts[Math.min(i+1,pts.length-1)].y - pts[i].y,
-                              pts[Math.min(i+1,pts.length-1)].x - pts[i].x);
-        let da = Math.abs(a2 - a1);
-        if (da > Math.PI) da = 2 * Math.PI - da;
-        if (da > bestTurnAngle) { bestTurnAngle = da; bestTurnIdx = i; }
-      }
-      if (bestTurnIdx > 0 && bestTurnAngle > 0.8) {
-        const seg1 = pts.slice(0, bestTurnIdx);
-        const seg2 = pts.slice(bestTurnIdx);
-        const a1 = angleOf(seg1);
-        const a2 = angleOf(seg2);
-        let diff = Math.abs(a1 - a2);
-        if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        const diffDeg = diff * 180 / Math.PI;
-        const deg1 = Math.abs(a1) * 180 / Math.PI;
-        const deg2 = Math.abs(a2) * 180 / Math.PI;
-        const diag1 = (deg1 > 15 && deg1 < 165);
-        const diag2 = (deg2 > 15 && deg2 < 165);
-        ex.xDiff = diffDeg;
-        ex.xDiff1Stroke = true;
-        if (diffDeg > 45 && diffDeg < 135 && diag1 && diag2) {
-          scores.LUCE = 30 + (90 - Math.abs(diffDeg - 90)) * 0.4;
-        }
+      // I due tratti devono incrociarsi (bounding box sovrapposti)
+      const bb = (strk) => {
+        const xs = strk.map(p=>p.x), ys = strk.map(p=>p.y);
+        return { x1:Math.min(...xs), x2:Math.max(...xs), y1:Math.min(...ys), y2:Math.max(...ys) };
+      };
+      const r1 = bb(allStrokes[0]), r2 = bb(allStrokes[1]);
+      const overlap = r1.x1 < r2.x2 && r1.x2 > r2.x1 && r1.y1 < r2.y2 && r1.y2 > r2.y1;
+
+      if (diffDeg > 45 && diffDeg < 135 && diag1 && diag2 && overlap) {
+        scores.LUCE = 35 + (90 - Math.abs(diffDeg - 90)) * 0.5;
       }
     }
 
